@@ -50,6 +50,8 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
   const [mode, setMode] = useState<SearchRequest["mode"]>("token")
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [hasSearched, setHasSearched] = useState(false)
 
   const fulltextDisabled = !settings.saveContentEnabled
 
@@ -59,6 +61,7 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
     if (!trimmedQuery) return
 
     setLoading(true)
+    setError(null)
     try {
       const response = await searchClient({
         query: trimmedQuery,
@@ -66,6 +69,11 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
         maxResults: settings.maxResults
       })
       setResults(response.results)
+      setHasSearched(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "搜索失败")
+      setResults([])
+      setHasSearched(true)
     } finally {
       setLoading(false)
     }
@@ -110,11 +118,17 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
         <button type="submit">搜索</button>
       </form>
 
+      {error && <p role="alert">搜索出错: {error}</p>}
       {loading && <p>搜索中...</p>}
+      {hasSearched && !loading && !error && results.length === 0 && (
+        <p>暂无搜索结果</p>
+      )}
 
       {results.map((result) => (
         <article key={result.id} aria-label={result.title}>
-          <a href={result.url}>{result.title}</a>
+          <a href={result.url} target="_blank" rel="noopener noreferrer">
+            {result.title}
+          </a>
           <div>{result.url}</div>
           <div>{new Date(result.visitTime).toLocaleString()}</div>
           {result.isBookmarked && <span aria-label="已收藏">★</span>}
@@ -124,4 +138,3 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
     </div>
   )
 }
-

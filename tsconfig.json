@@ -2,7 +2,11 @@
   "compilerOptions": {
     "target": "ES2022",
     "useDefineForClassFields": true,
-    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "lib": [
+      "DOM",
+      "DOM.Iterable",
+      "ES2022"
+    ],
     "allowJs": false,
     "skipLibCheck": true,
     "esModuleInterop": true,
@@ -15,8 +19,24 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["vitest/globals", "jsdom"]
+    "types": [
+      "vitest/globals",
+      "jsdom",
+      "chrome"
+    ]
   },
-  "include": ["background", "contents", "lib", "popup", "tests", "vitest.config.ts"]
+  "include": [
+    ".plasmo/index.d.ts",
+    "background.ts",
+    "popup.tsx",
+    "options.tsx",
+    "background",
+    "contents",
+    "lib",
+    "options",
+    "popup",
+    "tests",
+    "env.d.ts",
+    "vitest.config.ts"
+  ]
 }
-

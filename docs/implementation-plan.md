@@ -33,10 +33,10 @@
 可参考的方向：
 
 - Plasmo 扩展工程组织方式。
-- content script 中使用 `@mozilla/readability` 提取正文。
-- Readability 失败后退回 `document.body.innerText`。
+- content script 中使用正文提取器提取页面可见正文。
+- 后续可接入 `@mozilla/readability`，失败后退回 `document.body.innerText`。
 - 使用 Dexie 操作 IndexedDB。
-- 使用 `jieba-wasm` 建立中文分词索引。
+- 后续可使用 `jieba-wasm` 建立更好的中文分词索引。
 - popup 作为主搜索入口。
 
 不沿用的方向：
@@ -56,15 +56,15 @@
 - TypeScript
 - Dexie
 - IndexedDB
-- `@mozilla/readability`
-- `jieba-wasm`
+- 内置正文提取 fallback
+- 内置轻量分词 fallback
 
 原因：
 
 - Plasmo 可以减少 MV3、content script、popup、options 的样板配置。
 - Dexie 能简化 IndexedDB schema、索引和事务操作。
-- Readability 对文章类网页正文提取效果稳定。
-- `jieba-wasm` 能满足中文关键词搜索的基础分词需求。
+- 当前第一版先用 `main`、`article`、`body` 可见文本提取正文，减少依赖和集成风险。
+- 当前第一版先用轻量分词 fallback 支持中文连续串、中文单字/二元片段和英文/代码 token；后续再按效果接入 `jieba-wasm`。
 - 所有数据默认保存在本地，不上传到远端。
 
 ## 4. 建议目录结构
@@ -78,24 +78,27 @@
 ├── assets/
 │   └── icon.png
 ├── background/
-│   ├── index.ts
 │   ├── db.ts
 │   ├── search.ts
-│   ├── settings.ts
-│   └── bookmarks.ts
+│   └── capturePipeline.ts
+├── background.ts
 ├── contents/
-│   └── capture.ts
+│   └── pageCapture.ts
 ├── popup/
 │   ├── index.tsx
 │   ├── SearchApp.tsx
 │   └── popup.css
+├── popup.tsx
 ├── options/
 │   ├── index.tsx
-│   ├── OptionsApp.tsx
 │   └── options.css
+├── options.tsx
 ├── lib/
+│   ├── bookmarks.ts
 │   ├── extract.ts
+│   ├── messages.ts
 │   ├── normalize.ts
+│   ├── settings.ts
 │   ├── snippet.ts
 │   ├── urlRules.ts
 │   └── wordSplit.ts
@@ -208,7 +211,7 @@ const defaultSettings: AppSettings = {
 
 - 开启时，保存 `content`，允许使用全文查询，并能生成更准确的正文匹配片段。
 - 关闭时，不保存 `content`，全文查询在 UI 中不可选择；分词查询仍可使用已保存的 `titleWords` 和 `contentWords`。
-- 如果用户关闭该选项后已有旧正文数据，第一版应在保存设置时提示“是否清理已保存正文”；实现上可先提供清理动作，避免用户误以为关闭开关会自动删除历史正文。
+- 如果用户关闭该选项后已有旧正文数据，第一版通过设置页提供独立的“清空已保存正文”动作，并做二次确认，避免用户误以为关闭开关会自动删除历史正文。
 
 ## 6. 页面采集流程
 
@@ -227,12 +230,13 @@ content script 运行在普通网页：
 
 正文提取策略：
 
-1. 克隆当前 `document`。
-2. 如果 Readability 可解析，使用 `new Readability(clonedDocument).parse()?.textContent`。
-3. 如果失败或正文过短，退回 `document.body.innerText`。
-4. 对正文做基础清理：统一换行、合并过多空白、去掉首尾空白。
-5. 如果正文为空或长度过短，可跳过保存。
-6. 如果 `saveContentEnabled` 为关闭，正文只在本次保存流程中用于分词，不持久化保存。
+1. 优先读取 `main`、`article` 等正文容器的 `innerText`。
+2. 如果正文容器不存在或内容过短，退回 `document.body.innerText`。
+3. 对正文做基础清理：统一换行、合并过多空白、去掉首尾空白。
+4. 如果正文为空或长度过短，可跳过保存。
+5. 如果 `saveContentEnabled` 为关闭，正文只在本次保存流程中用于分词，不持久化保存。
+
+后续如果正文提取质量不足，再引入 `@mozilla/readability` 作为增强提取器。
 
 建议第一版阈值：
 
@@ -268,7 +272,7 @@ content script 运行在普通网页：
 ```text
 用户输入 query
 → normalize query
-→ jieba 分词
+→ 轻量分词 fallback
 → 查询 titleWords 和 contentWords
 → 计算简单分数
 → bulkGet 页面基础信息
@@ -299,6 +303,14 @@ Dexie 查询方式：
 - 对每个分词分别查 `titleWords` 和 `contentWords`。
 - 聚合 pageId 命中次数。
 - 再根据 pages 表补充 `visitTime`、`isBookmarked` 等排序因素。
+
+当前第一版分词由 `lib/wordSplit.ts` 提供，主要覆盖：
+
+- 中文连续串。
+- 中文单字和二元片段。
+- 英文、数字、代码符号附近的 token。
+
+该实现不等价于正式中文分词，后续可用 `jieba-wasm` 替换或增强。
 
 分词查询限制：
 
@@ -383,14 +395,11 @@ async function searchPages(request: SearchRequest) {
 → 返回前 maxResults 条
 ```
 
-第一版可先在 background 中分批扫描，避免一次性阻塞：
-
-```ts
-const batchSize = 100
-```
+当前第一版先在 background 中直接扫描已保存正文，配合 `maxResults` 控制返回数量。
 
 后续可升级：
 
+- 分批扫描，避免一次性阻塞。
 - Web Worker
 - 扫描进度事件
 - 停止扫描按钮
@@ -433,7 +442,6 @@ const batchSize = 100
 - 搜索输入框。
 - 搜索模式切换：`分词查询` / `全文查询`。
 - 当“保存正文”关闭时，`全文查询` 不可选择，并显示简短提示。
-- 过滤器第一版可先放一个 `仅书签` 开关，时间/域名过滤后续补。
 - 结果列表。
 - 设置入口。
 
@@ -447,11 +455,16 @@ const batchSize = 100
 
 交互：
 
-- 输入防抖 300ms。
-- 分词查询实时搜索，全文查询提示按 enter/搜索按钮 搜索。
+- 用户提交表单后发起搜索。
 - 点击结果打开新标签页。
 - 查询中显示搜索中。
 - 无结果显示明确状态。
+
+后续可增强：
+
+- 输入防抖 300ms。
+- 分词查询实时搜索。
+- `仅书签`、时间、域名过滤控件。
 
 ## 12. options 设置页
 
@@ -579,9 +592,9 @@ Manifest 权限建议：
 性能保护：
 
 - 正文长度上限。
-- 全文查询分批扫描。
+- 全文查询先用直接扫描，后续按数据量改为分批扫描或 Worker。
 - 搜索结果数量上限。
-- popup 输入防抖。
+- popup 搜索提交时控制查询频率，后续可增加输入防抖。
 - 非书签页面过期清理。
 
 存储保护：
@@ -636,7 +649,7 @@ npm test
 3. 实现设置默认值与 URL 排除规则。
 4. 实现 content script 正文采集。
 5. 实现 background 保存流程。
-6. 接入 `jieba-wasm` 分词。
+6. 接入轻量分词 fallback。
 7. 实现分词查询。
 8. 实现全文查询。
 9. 实现 popup 搜索界面和结果展示。
@@ -659,3 +672,5 @@ npm test
 - 搜索结果分页。
 - 更精细的 URL 归一化。
 - 更好的正文提取策略。
+- 接入 `@mozilla/readability`。
+- 接入 `jieba-wasm` 或其他中文分词库。

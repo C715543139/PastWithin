@@ -1,0 +1,122 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: #1f2933;
+  background: #f8fafc;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.options-container {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 24px 20px;
+}
+
+h1 {
+  margin: 0 0 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #d9e2ec;
+  font-size: 20px;
+}
+
+h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.options-section {
+  margin-bottom: 18px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #d9e2ec;
+  border-radius: 6px;
+}
+
+.options-checkbox,
+.options-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+}
+
+.options-field input[type="number"] {
+  width: 90px;
+  padding: 5px 6px;
+}
+
+.options-hint {
+  margin: 0 0 8px;
+  color: #627d98;
+  font-size: 12px;
+}
+
+textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #bcccdc;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  resize: vertical;
+}
+
+button {
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.options-btn-primary {
+  padding: 8px 18px;
+  color: #fff;
+  background: #1f6feb;
+  border: 0;
+}
+
+.options-btn-secondary {
+  padding: 7px 14px;
+  background: #f0f4f8;
+  border: 1px solid #bcccdc;
+}
+
+.options-btn-danger {
+  padding: 7px 14px;
+  color: #fff;
+  background: #c62828;
+  border: 0;
+}
+
+.options-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.options-stats {
+  padding-left: 0;
+  list-style: none;
+}
+
+.options-error,
+.options-success {
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border-radius: 4px;
+}
+
+.options-error {
+  color: #9b1c1c;
+  background: #fde8e8;
+}
+
+.options-success {
+  color: #03543f;
+  background: #def7ec;
+}
+

@@ -1,6 +1,6 @@
 # 测试契约
 
-这些测试用于先定义第一版能力的行为边界。当前根目录还没有正式插件源码，因此测试会先失败；后续实现源码模块时，应让这些测试逐步通过。
+这些测试用于定义第一版能力的行为边界，并作为后续重构的回归保护。当前源码已经实现了测试所覆盖的核心模块，正常情况下 `npm test` 应通过。
 
 ## 运行方式
 
@@ -29,7 +29,7 @@ npm run test:watch
 
 测试刻意面向小模块，而不是直接绑定浏览器全局对象：
 
-- `contents/capture`
+- `lib/extract`
 - `background/capturePipeline`
 - `background/db`
 - `background/search`
@@ -41,13 +41,22 @@ npm run test:watch
 
 ## 当前预期状态
 
-在源码模块尚未实现前，`npm test` 会失败，常见失败原因包括：
+当前推荐的基础验收命令：
 
-- 找不到 `contents/capture`
-- 找不到 `background/db`
-- 找不到 `background/search`
-- 找不到 `lib/urlRules`
-- 找不到 `lib/snippet`
-- 找不到 `popup/SearchApp`
+```bash
+npm test
+npx tsc --noEmit
+```
 
-这些失败是 TDD 阶段的正常状态，表示测试已经定义了后续实现需要满足的接口。
+如果后续改动导致测试失败，应优先确认失败是否来自接口行为变化，而不是直接放宽测试断言。确实需要调整行为契约时，应同步更新对应测试和实现文档。
+
+## 已覆盖能力
+
+- 页面标题、URL、正文、访问时间和书签状态采集。
+- URL/域名排除规则。
+- IndexedDB 页面数据、正文和分词索引保存。
+- 分词查询和全文查询。
+- 搜索结果字段、匹配片段和高亮。
+- popup 搜索入口的基本交互。
+- 清空本地数据。
+- 本地空间占用统计。

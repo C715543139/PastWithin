@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { extractPageSnapshot } from "../../contents/capture"
+import { extractPageSnapshot } from "../../lib/extract"
 import {
   ARTICLE_HTML,
   ARTICLE_URL,
@@ -66,4 +66,3 @@ describe("page capture", () => {
     expect(snapshot?.content.length).toBeLessThanOrEqual(100)
   })
 })
-
