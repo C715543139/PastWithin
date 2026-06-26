@@ -89,3 +89,7 @@ npx vitest run --coverage
 ## 许可证
 
 见 `LICENSE` 文件。
+
+## 参考项目
+
+本项目参考了 [fulltext-bookmark](https://github.com/RauX333/fulltext-bookmark.git) 的技术路线,包括 Plasmo 扩展工程组织方式、content script 正文提取、Dexie 操作 IndexedDB 等实现模式。
