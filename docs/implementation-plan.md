@@ -611,8 +611,17 @@ Manifest 权限建议：
 构建验收：
 
 ```bash
-pnpm install
-pnpm build
+npm install
+npm run build
+```
+
+测试验收：
+
+测试契约、依赖和运行方式以 `tests/README.md` 为准。当前推荐入口是：
+
+```bash
+npm install
+npm test
 ```
 
 浏览器验收：
