@@ -45,8 +45,9 @@ describe("IndexedDB page storage", () => {
       isBookmarked: true
     })
     expect(page?.contentLength).toBe(bookmarkedCapturedArticle.content.length)
+    expect(page?.id).toBeDefined()
 
-    const content = await getPageContent(db, page!.id)
+    const content = await getPageContent(db, page!.id!)
     expect(content?.content).toContain("老师发的基础换道控制器")
     expect(content?.titleWords).toEqual(expect.arrayContaining(["路径规划"]))
     expect(content?.contentWords).toEqual(expect.arrayContaining(["人工智能", "dwa", "cbs"]))
@@ -95,4 +96,3 @@ describe("IndexedDB page storage", () => {
     expect(await db.pageContents.count()).toBe(0)
   })
 })
-
