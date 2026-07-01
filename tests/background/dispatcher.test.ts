@@ -8,21 +8,23 @@ const capturePipelineMock = vi.fn().mockResolvedValue(undefined)
 const searchPagesMock = vi.fn().mockResolvedValue({ results: [] })
 const clearAllDataMock = vi.fn().mockResolvedValue(undefined)
 const clearSavedContentMock = vi.fn().mockResolvedValue(undefined)
-const getStorageStatsMock = vi.fn().mockResolvedValue<StorageStats>({
+const defaultStorageStats: StorageStats = {
     usageBytes: 0,
     quotaBytes: 0,
     pageCount: 0,
     contentCount: 0
-})
+}
+const getStorageStatsMock = vi.fn().mockResolvedValue(defaultStorageStats)
 const isUrlBookmarkedMock = vi.fn().mockResolvedValue(false)
-const getSettingsMock = vi.fn().mockResolvedValue<AppSettings>({
+const defaultAppSettings: AppSettings = {
     autoSaveEnabled: true,
     saveBookmarkedOnly: false,
     saveContentEnabled: true,
     tempPageRetentionDays: 60,
     maxResults: 50,
     excludedUrlPatterns: []
-})
+}
+const getSettingsMock = vi.fn().mockResolvedValue(defaultAppSettings)
 const saveSettingsMock = vi.fn().mockResolvedValue(undefined)
 const splitWordsMock = vi.fn().mockReturnValue([])
 

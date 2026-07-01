@@ -35,14 +35,14 @@ PastWithin 是一个轻量、本地优先的 Chrome 插件,用于保存用户浏
 - TypeScript
 - Dexie
 - IndexedDB
-- 内置正文提取 fallback
+- 内置完整文本采集工具
 - 内置轻量分词 fallback
 
 选型原因:
 
 - Plasmo 减少 MV3、content script、popup、options 的样板配置。
 - Dexie 简化 IndexedDB schema、索引和事务操作。
-- 使用 `main`、`article`、`body` 可见文本提取正文,减少依赖和集成风险。
+- 使用自研完整文本采集工具提取页面文本,策略偏召回,减少全文搜索漏页。
 - 使用轻量分词 fallback 支持中文连续串、中文单字/二元片段和英文/代码 token。
 - 所有数据默认保存在本地,不上传到远端。
 
@@ -209,17 +209,23 @@ content script 运行在普通网页:
 
 正文提取策略:
 
-1. 优先读取 `main`、`article` 等正文容器的 `innerText`。
-2. 如果正文容器不存在或内容过短,退回 `document.body.innerText`。
-3. 对正文做基础清理:统一换行、合并过多空白、去掉首尾空白。
-4. 如果正文为空或长度过短,跳过保存。
-5. 如果 `saveContentEnabled` 为关闭,正文只在本次保存流程中用于分词,不持久化保存。
+1. 使用自研完整文本采集工具 `lib/extract.ts`,不使用 `@mozilla/readability`。
+2. 策略偏召回:优先保留可见或近似可见的完整文本,服务全文搜索找回页面。
+3. 只读遍历当前 DOM,不修改真实页面。
+4. 跳过 `script`、`style`、`noscript`、`template`、`svg`、`canvas` 等无文本价值节点。
+5. 跳过隐藏元素,包括 `hidden`、`aria-hidden="true"`、`display:none` 和 `visibility:hidden`。
+6. 保留 `nav`、`header`、`footer`、`aside` 等区域的文本,因为 FAQ、课程目录、工具说明等内容可能出现在这些区域。
+7. 递归遍历 DOM 树,按节点顺序收集文本节点内容,并对块级元素自动插入换行。
+8. 采集 `input[value/placeholder]`、`textarea[value/placeholder]`、`img[alt]`、`button[value/aria-label/title]`、`[aria-label]`、`[title]` 等可见语义文本。
+9. 对正文做基础清理:统一换行、合并过多空白、去掉空行和首尾空白。
+10. 如果正文为空或长度过短,跳过保存。
+11. 如果 `saveContentEnabled` 为关闭,正文只在本次保存流程中用于分词,不持久化保存。
 
 阈值:
 
 - 标题为空不阻止保存。
 - 正文少于 20 个字符时跳过保存。
-- 单页正文上限设为 1 MB 字符串,避免异常页面撑爆存储。
+- 单页正文上限当前固定为 1 MiB 字符串,避免异常页面撑爆存储。
 
 ## 6. URL 排除模块
 
