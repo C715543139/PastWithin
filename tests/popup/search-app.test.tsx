@@ -214,6 +214,80 @@ describe("popup search app", () => {
     )
   })
 
+  it("asks for confirmation before running short fulltext queries", async () => {
+    const user = userEvent.setup()
+    const searchClient = vi.fn().mockResolvedValue({ results: [result] })
+
+    render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
+
+    await user.click(screen.getByRole("radio", { name: "全文查询" }))
+    await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "R2")
+    await user.click(screen.getByRole("button", { name: "搜索" }))
+
+    expect(searchClient).not.toHaveBeenCalled()
+    expect(screen.getByText(/全文查询词较短/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "继续全文搜索" }))
+
+    expect(searchClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: "R2",
+        mode: "fulltext"
+      })
+    )
+  })
+
+  it("lets users cancel short fulltext query confirmation", async () => {
+    const user = userEvent.setup()
+    const searchClient = vi.fn().mockResolvedValue({ results: [] })
+
+    render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
+
+    await user.click(screen.getByRole("radio", { name: "全文查询" }))
+    await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "tf")
+    await user.click(screen.getByRole("button", { name: "搜索" }))
+    await user.click(screen.getByRole("button", { name: "取消" }))
+
+    expect(searchClient).not.toHaveBeenCalled()
+    expect(screen.queryByText(/全文查询词较短/)).not.toBeInTheDocument()
+  })
+
+  it("clears short fulltext confirmation when the query changes", async () => {
+    const user = userEvent.setup()
+    const searchClient = vi.fn().mockResolvedValue({ results: [] })
+
+    render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
+
+    const searchbox = screen.getByRole("searchbox", { name: /搜索/ })
+    await user.click(screen.getByRole("radio", { name: "全文查询" }))
+    await user.type(searchbox, "tf")
+    await user.click(screen.getByRole("button", { name: "搜索" }))
+
+    expect(screen.getByText(/全文查询词较短/)).toBeInTheDocument()
+
+    await user.type(searchbox, "x")
+
+    expect(screen.queryByText(/全文查询词较短/)).not.toBeInTheDocument()
+  })
+
+  it("does not ask for confirmation for short token queries", async () => {
+    const user = userEvent.setup()
+    const searchClient = vi.fn().mockResolvedValue({ results: [] })
+
+    render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
+
+    await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "R2")
+    await user.click(screen.getByRole("button", { name: "搜索" }))
+
+    expect(screen.queryByText(/全文查询词较短/)).not.toBeInTheDocument()
+    expect(searchClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: "R2",
+        mode: "token"
+      })
+    )
+  })
+
   it("waits until Chinese composition ends before running realtime token search", async () => {
     vi.useFakeTimers()
     const searchClient = vi.fn().mockResolvedValue({ results: [] })

@@ -14,6 +14,7 @@ type SearchClient = (
 ) => Promise<{ results: SearchResult[] }>
 
 const TOKEN_SEARCH_DEBOUNCE_MS = 300
+const SHORT_FULLTEXT_QUERY_MAX_LENGTH = 2
 
 interface SearchAppProps {
   settings: AppSettings
@@ -67,9 +68,36 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
   const [error, setError] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
   const [isComposing, setIsComposing] = useState(false)
+  const [pendingShortQuery, setPendingShortQuery] = useState<string | null>(null)
+  const [confirmedShortQuery, setConfirmedShortQuery] = useState<string | null>(null)
   const requestIdRef = useRef(0)
 
   const fulltextDisabled = !settings.saveContentEnabled
+
+  function updateQuery(nextQuery: string) {
+    setQuery(nextQuery)
+    setPendingShortQuery(null)
+    setConfirmedShortQuery(null)
+  }
+
+  function updateMode(nextMode: SearchRequest["mode"]) {
+    setMode(nextMode)
+    setPendingShortQuery(null)
+    setConfirmedShortQuery(null)
+  }
+
+  function shouldConfirmShortFulltextQuery(
+    trimmedQuery: string,
+    requestedMode: SearchRequest["mode"]
+  ): boolean {
+    return (
+      requestedMode === "fulltext" &&
+      !fulltextDisabled &&
+      trimmedQuery.length > 0 &&
+      trimmedQuery.length <= SHORT_FULLTEXT_QUERY_MAX_LENGTH &&
+      confirmedShortQuery !== trimmedQuery
+    )
+  }
 
   const clearSearch = useCallback(() => {
     requestIdRef.current += 1
@@ -136,7 +164,25 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
 
   function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault()
+    const trimmedQuery = query.trim()
+    if (shouldConfirmShortFulltextQuery(trimmedQuery, mode)) {
+      setPendingShortQuery(trimmedQuery)
+      return
+    }
+
     void runSearch(query, mode)
+  }
+
+  function handleConfirmShortQuery() {
+    if (!pendingShortQuery) return
+
+    setConfirmedShortQuery(pendingShortQuery)
+    setPendingShortQuery(null)
+    void runSearch(pendingShortQuery, "fulltext")
+  }
+
+  function handleCancelShortQuery() {
+    setPendingShortQuery(null)
   }
 
   return (
@@ -147,11 +193,11 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
           aria-label="搜索"
           type="text"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => updateQuery(event.target.value)}
           onCompositionStart={() => setIsComposing(true)}
           onCompositionEnd={(event) => {
             setIsComposing(false)
-            setQuery(event.currentTarget.value)
+            updateQuery(event.currentTarget.value)
           }}
         />
 
@@ -162,7 +208,7 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
               type="radio"
               name="searchMode"
               checked={mode === "token"}
-              onChange={() => setMode("token")}
+              onChange={() => updateMode("token")}
             />
             分词查询
           </label>
@@ -171,7 +217,7 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
               type="radio"
               name="searchMode"
               checked={mode === "fulltext"}
-              onChange={() => setMode("fulltext")}
+              onChange={() => updateMode("fulltext")}
               disabled={fulltextDisabled}
             />
             全文查询
@@ -183,8 +229,32 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
           <p>请按 Enter 或点击全文搜索。</p>
         )}
 
-        <button type="submit">搜索</button>
+        <button type="submit" className="popup-btn popup-btn-primary">
+          搜索
+        </button>
       </form>
+
+      {pendingShortQuery && (
+        <div role="alert" className="short-query-confirm">
+          <p>全文查询词较短，可能命中大量页面并花费更久。</p>
+          <div className="short-query-actions">
+            <button
+              type="button"
+              onClick={handleConfirmShortQuery}
+              className="popup-btn popup-btn-primary"
+            >
+              继续全文搜索
+            </button>
+            <button
+              type="button"
+              onClick={handleCancelShortQuery}
+              className="popup-btn popup-btn-secondary"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
 
       {error && <p role="alert">搜索出错: {error}</p>}
       {loading && <p>搜索中...</p>}
