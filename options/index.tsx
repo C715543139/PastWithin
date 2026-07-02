@@ -5,6 +5,8 @@ import { defaultSettings } from "../lib/settings"
 
 import "./options.css"
 
+const OPTIONS_PAGE_TITLE = "PastWithin 扩展设置"
+
 function chromeAvailable(): boolean {
   try {
     return (
@@ -39,6 +41,10 @@ export default function OptionsIndex() {
     type: "error" | "success"
     text: string
   } | null>(null)
+
+  useEffect(() => {
+    document.title = OPTIONS_PAGE_TITLE
+  }, [])
 
   async function refreshStats() {
     const nextStats = await sendMessage<StorageStats>({ type: "getStats" })
@@ -153,7 +159,7 @@ export default function OptionsIndex() {
   if (apiUnavailable) {
     return (
       <div className="options-container">
-        <h1>PastWithin 设置</h1>
+        <h1>{OPTIONS_PAGE_TITLE}</h1>
         <div className="options-error">
           Chrome extension API 不可用。请在扩展选项中打开此页面。
         </div>
@@ -165,7 +171,7 @@ export default function OptionsIndex() {
 
   return (
     <div className="options-container">
-      <h1>PastWithin 设置</h1>
+      <h1>{OPTIONS_PAGE_TITLE}</h1>
 
       {statusMessage && (
         <div
@@ -313,4 +319,3 @@ export default function OptionsIndex() {
     </div>
   )
 }
-

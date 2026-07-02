@@ -76,6 +76,7 @@ function defaultResponse(message: { type: string }): unknown {
 describe("options index", () => {
     beforeEach(() => {
         vi.clearAllMocks()
+        document.title = ""
     })
 
     afterEach(() => {
@@ -87,6 +88,7 @@ describe("options index", () => {
 
         render(<OptionsIndex />)
 
+        expect(document.title).toBe("PastWithin 扩展设置")
         expect(screen.getByText(/Chrome extension API 不可用/)).toBeInTheDocument()
     })
 
@@ -96,8 +98,9 @@ describe("options index", () => {
         render(<OptionsIndex />)
 
         await waitFor(() =>
-            expect(screen.getByRole("heading", { name: "PastWithin 设置" })).toBeInTheDocument()
+            expect(screen.getByRole("heading", { name: "PastWithin 扩展设置" })).toBeInTheDocument()
         )
+        expect(document.title).toBe("PastWithin 扩展设置")
         expect(screen.getByLabelText("自动保存访问页面")).toBeChecked()
         expect(screen.getByLabelText("保存正文")).toBeChecked()
         expect(screen.getByText(/已保存页面数：5/)).toBeInTheDocument()
