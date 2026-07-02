@@ -1,10 +1,19 @@
-import { useState, type FormEvent, type ReactNode } from "react"
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type SyntheticEvent
+} from "react"
 
 import type { AppSettings, SearchRequest, SearchResult } from "../lib/types"
 
 type SearchClient = (
   params: Pick<SearchRequest, "query" | "mode" | "maxResults">
 ) => Promise<{ results: SearchResult[] }>
+
+const TOKEN_SEARCH_DEBOUNCE_MS = 300
 
 interface SearchAppProps {
   settings: AppSettings
@@ -52,31 +61,77 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
+  const [isComposing, setIsComposing] = useState(false)
+  const requestIdRef = useRef(0)
 
   const fulltextDisabled = !settings.saveContentEnabled
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    const trimmedQuery = query.trim()
-    if (!trimmedQuery) return
-
-    setLoading(true)
+  const clearSearch = useCallback(() => {
+    requestIdRef.current += 1
+    setResults([])
     setError(null)
-    try {
-      const response = await searchClient({
-        query: trimmedQuery,
-        mode: fulltextDisabled ? "token" : mode,
-        maxResults: settings.maxResults
-      })
-      setResults(response.results)
-      setHasSearched(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "搜索失败")
-      setResults([])
-      setHasSearched(true)
-    } finally {
-      setLoading(false)
+    setLoading(false)
+    setHasSearched(false)
+  }, [])
+
+  const runSearch = useCallback(
+    async (rawQuery: string, requestedMode: SearchRequest["mode"]) => {
+      const trimmedQuery = rawQuery.trim()
+      if (!trimmedQuery) {
+        clearSearch()
+        return
+      }
+
+      const requestId = requestIdRef.current + 1
+      requestIdRef.current = requestId
+
+      setLoading(true)
+      setError(null)
+      try {
+        const response = await searchClient({
+          query: trimmedQuery,
+          mode: fulltextDisabled ? "token" : requestedMode,
+          maxResults: settings.maxResults
+        })
+
+        if (requestIdRef.current !== requestId) return
+
+        setResults(response.results)
+        setHasSearched(true)
+      } catch (err) {
+        if (requestIdRef.current !== requestId) return
+
+        setError(err instanceof Error ? err.message : "搜索失败")
+        setResults([])
+        setHasSearched(true)
+      } finally {
+        if (requestIdRef.current === requestId) {
+          setLoading(false)
+        }
+      }
+    },
+    [clearSearch, fulltextDisabled, searchClient, settings.maxResults]
+  )
+
+  useEffect(() => {
+    if (mode !== "token" || isComposing) return
+
+    const trimmedQuery = query.trim()
+    if (!trimmedQuery) {
+      clearSearch()
+      return
     }
+
+    const timerId = window.setTimeout(() => {
+      void runSearch(trimmedQuery, "token")
+    }, TOKEN_SEARCH_DEBOUNCE_MS)
+
+    return () => window.clearTimeout(timerId)
+  }, [clearSearch, isComposing, mode, query, runSearch])
+
+  function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault()
+    void runSearch(query, mode)
   }
 
   return (
@@ -88,6 +143,11 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
           type="text"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          onCompositionStart={() => setIsComposing(true)}
+          onCompositionEnd={(event) => {
+            setIsComposing(false)
+            setQuery(event.currentTarget.value)
+          }}
         />
 
         <fieldset>
@@ -114,6 +174,9 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
         </fieldset>
 
         {fulltextDisabled && <p>保存正文关闭，全文查询不可用</p>}
+        {!fulltextDisabled && mode === "fulltext" && (
+          <p>请按 Enter 或点击全文搜索。</p>
+        )}
 
         <button type="submit">搜索</button>
       </form>
