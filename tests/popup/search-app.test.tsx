@@ -53,11 +53,13 @@ describe("popup search app", () => {
     )
 
     const item = await screen.findByRole("article", { name: "路径规划课程笔记" })
-    expect(within(item).getByRole("link", { name: "路径规划课程笔记" })).toHaveAttribute("href", result.url)
+    const titleLink = within(item).getByRole("link", { name: "路径规划课程笔记" })
+    expect(titleLink).toHaveAttribute("href", result.url)
+    expect(within(titleLink).getByText("路径规划").tagName).toBe("MARK")
     expect(within(item).getByText(result.url)).toBeInTheDocument()
     expect(within(item).getByText(new Date(VISIT_TIME).toLocaleString())).toBeInTheDocument()
     expect(within(item).getByLabelText("已收藏")).toBeInTheDocument()
-    expect(within(item).getByText("路径规划")).toHaveTextContent("路径规划")
+    expect(within(item).getAllByText("路径规划")).toHaveLength(2)
   })
 
   it("sends fulltext search requests when the user selects fulltext mode", async () => {
@@ -76,6 +78,29 @@ describe("popup search app", () => {
         mode: "fulltext"
       })
     )
+  })
+
+  it("highlights result titles case-insensitively", async () => {
+    const user = userEvent.setup()
+    const searchClient = vi.fn().mockResolvedValue({
+      results: [
+        {
+          ...result,
+          title: "PyTorch 调试",
+          snippet: "torch.randint 报错",
+          highlights: ["pytorch"]
+        }
+      ]
+    })
+
+    render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
+
+    await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "pytorch")
+    await user.click(screen.getByRole("button", { name: "搜索" }))
+
+    const item = await screen.findByRole("article", { name: "PyTorch 调试" })
+    const titleLink = within(item).getByRole("link", { name: "PyTorch 调试" })
+    expect(within(titleLink).getByText("PyTorch").tagName).toBe("MARK")
   })
 
   it("disables fulltext mode when saving raw content is disabled", async () => {

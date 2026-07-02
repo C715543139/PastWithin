@@ -20,38 +20,43 @@ interface SearchAppProps {
   searchClient: SearchClient
 }
 
-function renderHighlightedSnippet(
-  snippet: string,
+function renderHighlightedText(
+  text: string,
   highlights: string[]
 ): ReactNode {
-  if (!highlights.length || !snippet) return snippet
+  if (!highlights.length || !text) return text
 
   const parts: ReactNode[] = []
   let cursor = 0
+  const lowerText = text.toLowerCase()
+  const normalizedHighlights = highlights
+    .map((highlight) => highlight.toLowerCase())
+    .filter((highlight) => highlight.length > 0)
 
-  while (cursor < snippet.length) {
-    const next = highlights
+  while (cursor < text.length) {
+    const next = normalizedHighlights
       .map((highlight) => ({
         highlight,
-        index: snippet.indexOf(highlight, cursor)
+        index: lowerText.indexOf(highlight, cursor)
       }))
       .filter((item) => item.highlight.length > 0 && item.index >= 0)
       .sort((a, b) => a.index - b.index)[0]
 
     if (!next) {
-      parts.push(snippet.slice(cursor))
+      parts.push(text.slice(cursor))
       break
     }
 
     if (next.index > cursor) {
-      parts.push(snippet.slice(cursor, next.index))
+      parts.push(text.slice(cursor, next.index))
     }
 
-    parts.push(<mark key={`${next.highlight}-${next.index}`}>{next.highlight}</mark>)
-    cursor = next.index + next.highlight.length
+    const end = next.index + next.highlight.length
+    parts.push(<mark key={`${next.highlight}-${next.index}`}>{text.slice(next.index, end)}</mark>)
+    cursor = end
   }
 
-  return parts.length > 0 ? parts : snippet
+  return parts.length > 0 ? parts : text
 }
 
 export function SearchApp({ settings, searchClient }: SearchAppProps) {
@@ -190,12 +195,12 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
       {results.map((result) => (
         <article key={result.id} aria-label={result.title}>
           <a href={result.url} target="_blank" rel="noopener noreferrer">
-            {result.title}
+            {renderHighlightedText(result.title, result.highlights)}
           </a>
           <div>{result.url}</div>
           <div>{new Date(result.visitTime).toLocaleString()}</div>
           {result.isBookmarked && <span aria-label="已收藏">★</span>}
-          <div>{renderHighlightedSnippet(result.snippet, result.highlights)}</div>
+          <div>{renderHighlightedText(result.snippet, result.highlights)}</div>
         </article>
       ))}
     </div>

@@ -184,14 +184,22 @@ async function tokenSearch(
 
   return scored.map(({ pageId, page, score }) => {
     const pageContent = contentByPageId.get(pageId)
-    const snippetData = pageContent?.content
+    const titleHighlights = tokens.filter((token) =>
+      page.title.toLowerCase().includes(token.toLowerCase())
+    )
+    const contentSnippetData = pageContent?.content
       ? buildTokenSnippet(pageContent.content, tokens)
-      : {
-          text: page.title,
-          highlights: tokens.filter((token) =>
-            page.title.toLowerCase().includes(token.toLowerCase())
-          )
-        }
+      : null
+    const snippetData =
+      contentSnippetData && (contentSnippetData.highlights.length > 0 || titleHighlights.length === 0)
+        ? contentSnippetData
+        : {
+            text: page.title,
+            highlights: titleHighlights
+          }
+    const highlights = Array.from(
+      new Set([...snippetData.highlights, ...titleHighlights])
+    )
 
     return {
       id: page.id!,
@@ -200,7 +208,7 @@ async function tokenSearch(
       visitTime: page.visitTime,
       isBookmarked: page.isBookmarked,
       snippet: snippetData.text,
-      highlights: snippetData.highlights,
+      highlights,
       score
     }
   })

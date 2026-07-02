@@ -97,6 +97,42 @@ describe("search strategies", () => {
     expect(response.results[0].highlights).toEqual(["Main.gd:328 total_len"])
   })
 
+  it("falls back to the title snippet when token search only matches the title", async () => {
+    db = createPastWithinDb(uniqueDbName("title-only-search"))
+    await savePageWithIndexes(
+      {
+        url: "https://example.com/title-only",
+        title: "PyTorch 调试",
+        content: "这里记录一个没有相关分词命中的普通正文。",
+        visitTime: bookmarkedCapturedArticle.visitTime,
+        isBookmarked: false
+      },
+      {
+        db,
+        settings: defaultSettings,
+        splitWords: testSplitWords
+      }
+    )
+
+    const response = await searchPages({
+      db,
+      settings: defaultSettings,
+      splitWords: testSplitWords,
+      request: {
+        query: "pytorch",
+        mode: "token",
+        maxResults: 10
+      }
+    })
+
+    expect(response.results).toHaveLength(1)
+    expect(response.results[0]).toMatchObject({
+      title: "PyTorch 调试",
+      snippet: "PyTorch 调试"
+    })
+    expect(response.results[0].highlights).toEqual(expect.arrayContaining(["pytorch"]))
+  })
+
   it("allows short but distinctive fulltext queries", async () => {
     await seedSearchPages()
 
@@ -137,4 +173,3 @@ describe("search strategies", () => {
     expect(response.error).toMatch(/unavailable|disabled/i)
   })
 })
-
