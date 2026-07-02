@@ -58,7 +58,7 @@ npx tsc --noEmit
 - 分词查询和全文查询。
 - 搜索结果字段、匹配片段和高亮。
 - popup 搜索入口的基本交互。
-- 轻量分词 fallback（中文连续串、单字/二元、英文/代码 token）。
+- `jieba-wasm` + `Intl.Segmenter` 混合分词封装（测试中 mock WASM 初始化与分词输出）。
 - URL 归一化（hash 剥离与异常回退）。
 - 书签状态查询包装层（`chrome.bookmarks` 不可用与异常容错）。
 - 设置读写包装层（`chrome.storage.local` 合并默认值与异常容错）。

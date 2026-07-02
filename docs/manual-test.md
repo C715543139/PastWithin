@@ -21,6 +21,7 @@ npm run build
 3. 点击“加载已解压的扩展程序”。
 4. 选择本仓库下的 `build/chrome-mv3-prod/` 目录。
 5. 确认扩展卡片中出现 `PastWithin`。
+6. 如果之前安装过旧版本，先在 options 中清空全部本地数据，避免旧分词索引影响本次验收。
 
 ## 4. Popup 验收
 
@@ -29,6 +30,7 @@ npm run build
 3. 输入关键词，确认能发起分词查询。
 4. 切换全文查询，确认能搜索连续片段。
 5. 关闭“保存正文”后，确认全文查询不可选择。
+6. 首次分词查询可能触发 `jieba-wasm` 初始化；确认首次搜索不会报错，稍后重复搜索响应正常。
 
 ## 5. Options 验收
 
@@ -42,11 +44,15 @@ npm run build
 1. 打开一个普通网页，例如 `https://example.com`。
 2. 等页面加载完成后打开 popup 搜索网页中的词。
 3. 确认被排除 URL 不会保存。
+4. 打开包含中文术语的页面后，使用分词查询搜索 `人工智能`、`路径规划`、`知识图谱` 等词，确认能找到页面。
+5. 打开包含英文或代码词的页面后，使用分词查询搜索 `pytorch`、`torch`、`total_len` 等词，确认能找到页面。
+6. 对连续代码片段或词中间片段，切换到全文查询验证，例如 `Main.gd:328 total_len`。
 
 ## 7. Background 验收
 
 1. 在 `chrome://extensions/` 中打开 PastWithin 的 Service Worker 控制台。
 2. 确认保存、搜索、设置、统计、清空数据时没有未处理错误。
+3. 刷新扩展或等待 Service Worker 休眠后重新搜索中文词，确认 `jieba-wasm` 可重新初始化。
 
 ## 8. 自动测试
 
@@ -54,4 +60,3 @@ npm run build
 npm test
 npx tsc --noEmit
 ```
-

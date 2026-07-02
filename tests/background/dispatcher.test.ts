@@ -26,7 +26,7 @@ const defaultAppSettings: AppSettings = {
 }
 const getSettingsMock = vi.fn().mockResolvedValue(defaultAppSettings)
 const saveSettingsMock = vi.fn().mockResolvedValue(undefined)
-const splitWordsMock = vi.fn().mockReturnValue([])
+const splitWordsMock = vi.fn().mockResolvedValue([])
 
 vi.mock("../../background/capturePipeline", () => ({
     handleCapturedPageMessage: capturePipelineMock

@@ -36,14 +36,15 @@ PastWithin 是一个轻量、本地优先的 Chrome 插件,用于保存用户浏
 - Dexie
 - IndexedDB
 - 内置完整文本采集工具
-- 内置轻量分词 fallback
+- `jieba-wasm` 中文分词
+- `Intl.Segmenter` 英文分词
 
 选型原因:
 
 - Plasmo 减少 MV3、content script、popup、options 的样板配置。
 - Dexie 简化 IndexedDB schema、索引和事务操作。
 - 使用自研完整文本采集工具提取页面文本,策略偏召回,减少全文搜索漏页。
-- 使用轻量分词 fallback 支持中文连续串、中文单字/二元片段和英文/代码 token。
+- 使用 `jieba-wasm` 的搜索模式进行中文分词,使用 `Intl.Segmenter` 处理英文词。
 - 所有数据默认保存在本地,不上传到远端。
 
 ## 3. 目录结构
@@ -255,7 +256,7 @@ content script 运行在普通网页:
 ```text
 用户输入 query
 → normalize query
-→ 轻量分词 fallback
+→ `jieba-wasm` + `Intl.Segmenter` 分词
 → 查询 titleWords 和 contentWords
 → 计算简单分数
 → bulkGet 页面基础信息
@@ -287,19 +288,20 @@ Dexie 查询方式:
 - 聚合 pageId 命中次数。
 - 再根据 pages 表补充 `visitTime`、`isBookmarked` 等排序因素。
 
-分词由 `lib/wordSplit.ts` 提供,覆盖:
+分词由 `lib/wordSplit.ts` 提供:
 
-- 中文连续串。
-- 中文单字和二元片段。
-- 英文、数字、代码符号附近的 token。
+- 中文使用 `jieba-wasm` 的 `cut_for_search` 搜索模式。
+- 英文使用 `Intl.Segmenter("en", { granularity: "word" })`。
+- 两者结果统一清洗、转小写、过滤空值并去重。
+- `splitWords` 是异步函数,首次调用会初始化 WASM;初始化 Promise 会被缓存,失败后允许下次重试。
 
-该实现不等价于正式中文分词。
+该实现不保留旧的中文单字/二元片段 fallback,也不引入 token 权重。
 
 分词查询限制:
 
 - 不保证连续片段匹配。
 - 不保证英文/代码中间部分匹配。
-- 对极短词可能返回较多结果。
+- 对词中间片段和极短片段的召回弱于旧 fallback;这类场景应使用全文查询。
 
 这些限制通过 UI 文案解释,并提供全文查询入口。
 

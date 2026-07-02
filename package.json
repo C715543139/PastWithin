@@ -20,10 +20,14 @@
     "host_permissions": [
       "http://*/*",
       "https://*/*"
-    ]
+    ],
+    "content_security_policy": {
+      "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+    }
   },
   "dependencies": {
     "dexie": "^4.4.4",
+    "jieba-wasm": "^2.4.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

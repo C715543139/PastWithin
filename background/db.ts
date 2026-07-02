@@ -38,14 +38,14 @@ export async function savePageWithIndexes(
   }: {
     db: PastWithinDb
     settings: AppSettings
-    splitWords: (input: string) => string[]
+    splitWords: (input: string) => Promise<string[]>
   }
 ): Promise<void> {
   const normalizedUrl = normalizeUrl(capturedPage.url)
   const pageKey = normalizedUrl
   const now = Date.now()
-  const titleWords = uniqueWords(splitWords(capturedPage.title))
-  const contentWords = uniqueWords(splitWords(capturedPage.content))
+  const titleWords = uniqueWords(await splitWords(capturedPage.title))
+  const contentWords = uniqueWords(await splitWords(capturedPage.content))
 
   await db.transaction("rw", db.pages, db.pageContents, async () => {
     const existing = await db.pages
@@ -123,4 +123,3 @@ export async function getStorageStats(db: PastWithinDb): Promise<StorageStats> {
     contentCount
   }
 }
-

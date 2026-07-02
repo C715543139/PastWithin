@@ -68,7 +68,7 @@ export const defaultSettings = {
   ]
 }
 
-export function testSplitWords(input: string): string[] {
+export async function testSplitWords(input: string): Promise<string[]> {
   if (!input) {
     return []
   }

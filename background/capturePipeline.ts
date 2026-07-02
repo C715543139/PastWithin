@@ -20,7 +20,7 @@ interface SavePageData {
 
 interface SavePageOptions {
   settings: PipelineSettings
-  splitWords: (input: string) => string[]
+  splitWords: (input: string) => Promise<string[]>
 }
 
 interface PipelineDeps {
@@ -31,7 +31,7 @@ interface PipelineDeps {
     pageData: SavePageData,
     options: SavePageOptions
   ) => Promise<unknown>
-  splitWords: (input: string) => string[]
+  splitWords: (input: string) => Promise<string[]>
 }
 
 export async function handleCapturedPageMessage(deps: PipelineDeps): Promise<void> {
@@ -58,4 +58,3 @@ export async function handleCapturedPageMessage(deps: PipelineDeps): Promise<voi
     }
   )
 }
-

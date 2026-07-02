@@ -88,10 +88,10 @@ function buildFulltextSnippet(content: string, query: string): SnippetData {
 async function tokenSearch(
   db: PastWithinDb,
   request: SearchRequest,
-  splitWords: (input: string) => string[],
+  splitWords: (input: string) => Promise<string[]>,
   maxResults: number
 ): Promise<SearchResult[]> {
-  const tokens = splitWords(request.query)
+  const tokens = await splitWords(request.query)
   if (tokens.length === 0) return []
 
   const hitMap = new Map<
@@ -276,7 +276,7 @@ export const fulltextSearchStrategy: SearchStrategy = {
 export async function searchPages(params: {
   db: PastWithinDb
   settings: AppSettings
-  splitWords: (input: string) => string[]
+  splitWords: (input: string) => Promise<string[]>
   request: SearchRequest
 }): Promise<{ results: SearchResult[]; error?: string }> {
   const { db, settings, splitWords, request } = params
@@ -304,4 +304,3 @@ export async function searchPages(params: {
       : results
   }
 }
-
