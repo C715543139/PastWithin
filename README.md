@@ -37,6 +37,15 @@ npm run build
 
 构建产物位于 `build/chrome-mv3-prod/`,在 Chrome 扩展管理页加载该目录即可使用。
 
+### 手动加载到 Chrome
+
+1. 下载构建产物 `PastWithin-v0.2.0-chrome-mv3.zip` 并解压到 `PastWithin` 目录。
+2. 打开 Chrome,在地址栏访问 `chrome://extensions/`。
+3. 打开右上角的“开发者模式”。
+4. 点击“加载已解压的扩展程序”。
+5. 选择 `PastWithin` 目录。
+6. 加载完成后,浏览普通网页触发采集,再点击工具栏中的 PastWithin 图标进行搜索。
+
 ## 测试
 
 ```bash
