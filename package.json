@@ -1,6 +1,6 @@
 {
   "name": "past-within",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
   },
   "manifest": {
     "name": "PastWithin",
-    "description": "本地优先的 Chrome 历史和书签全文搜索工具",
+    "description": "本地优先的 Chrome 历史页面搜索工具，支持分词与全文查询",
     "permissions": [
       "storage",
       "bookmarks",
