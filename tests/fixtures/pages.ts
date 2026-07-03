@@ -55,16 +55,20 @@ export const defaultSettings = {
   saveContentEnabled: true,
   tempPageRetentionDays: 60,
   maxResults: 50,
-  excludedUrlPatterns: [
-    "^chrome://",
-    "^edge://",
-    "^about:",
-    "^file://",
-    "^chrome-extension://",
-    "^https://mail\\.google\\.com/",
-    "^https://outlook\\.live\\.com/",
-    "^https://.*\\.bank",
-    "^https://.*\\.edu.*/(login|auth|jw|jiaowu)"
+  excludedUrlRules: [
+    { id: "default-1", pattern: "^chrome://", enabled: true },
+    { id: "default-2", pattern: "^edge://", enabled: true },
+    { id: "default-3", pattern: "^about:", enabled: true },
+    { id: "default-4", pattern: "^file://", enabled: true },
+    { id: "default-5", pattern: "^chrome-extension://", enabled: true },
+    { id: "default-6", pattern: "^https://mail\\.google\\.com/", enabled: true },
+    { id: "default-7", pattern: "^https://outlook\\.live\\.com/", enabled: true },
+    { id: "default-8", pattern: "^https://.*\\.bank", enabled: true },
+    {
+      id: "default-9",
+      pattern: "^https://.*\\.edu.*/(login|auth|jw|jiaowu)",
+      enabled: true
+    }
   ]
 }
 
@@ -127,7 +131,7 @@ export const BIGJPG_HTML = `
         <dt>支持哪些格式？</dt>
         <dd>支持 PNG、JPG 和 WebP 格式。</dd>
       </dl>
-      <div style="display:none">这段内容应该被隐藏，不会出现在正文中</div>
+      <div style="display:none">这段内容应该被隐藏，不会出现在全文中</div>
     </aside>
     <footer>Bigjpg 版权所有</footer>
     <canvas id="preview"></canvas>

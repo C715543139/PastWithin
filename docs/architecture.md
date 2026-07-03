@@ -4,11 +4,11 @@
 
 ## 1. 目标与边界
 
-PastWithin 是一个轻量、本地优先的 Chrome 插件,用于保存用户浏览过的普通网页正文,并支持通过正文关键词、连续片段、代码片段或短关键词找回页面。
+PastWithin 是一个轻量、本地优先的 Chrome 插件,用于保存用户浏览过的普通网页全文,并支持通过全文关键词、连续片段、代码片段或短关键词找回页面。
 
 已实现能力:
 
-- 自动采集普通网页的标题、URL、正文、访问时间和书签状态。
+- 自动采集普通网页的标题、URL、全文、访问时间和书签状态。
 - 使用 IndexedDB 在本地保存页面数据和分词索引。
 - 提供 popup 搜索入口。
 - 支持两种搜索模式:分词查询和全文查询。
@@ -122,7 +122,7 @@ pages: "++id,&pageKey,&normalizedUrl,visitTime,isBookmarked"
 - `normalizedUrl` 用于去重和覆盖更新,当前只移除 hash,保留 query。
 - `pageKey` 当前等于 `normalizedUrl`,预留为后续稳定页面标识。
 - 同一个 `normalizedUrl` 再次访问时更新记录,而不是重复插入。
-- 不自动保存同一 URL 的历史快照;PastWithin 默认只保留页面的最新正文快照。
+- 不自动保存同一 URL 的历史快照;PastWithin 默认只保留页面的最新全文快照。
 
 URL 存储原则:
 
@@ -134,7 +134,7 @@ URL 存储原则:
 
 ### 4.2 pageContents 表
 
-保存正文和分词索引。
+保存全文和分词索引。
 
 ```ts
 interface PageContentRecord {
@@ -153,9 +153,9 @@ pageContents: "&pageId,*titleWords,*contentWords"
 
 说明:
 
-- `content` 用于全文查询和生成匹配片段;当用户关闭"保存正文"时,该字段不写入或写入空字符串。
+- `content` 用于全文查询和生成匹配片段;当用户关闭"保存全文"时,保存流程不新增或覆盖该字段。
 - `titleWords`、`contentWords` 用于分词查询。
-- 即使关闭"保存正文",保存流程仍可在内存中临时使用本次提取到的正文生成 `contentWords`,然后丢弃原始正文。
+- 即使关闭"保存全文",保存流程仍可在内存中临时使用本次提取到的全文生成 `contentWords`,然后丢弃原始全文;如果该页面过去已经保存过全文,不会因为本次关闭开关而被清空。
 
 ### 4.3 settings 存储
 
@@ -168,7 +168,15 @@ interface AppSettings {
   saveContentEnabled: boolean
   tempPageRetentionDays: number
   maxResults: number
-  excludedUrlPatterns: string[]
+  excludedUrlRules: UrlRule[]
+}
+
+interface UrlRule {
+  id: string
+  pattern: string
+  enabled: boolean
+  createdAt?: number
+  updatedAt?: number
 }
 ```
 
@@ -181,27 +189,34 @@ const defaultSettings: AppSettings = {
   saveContentEnabled: true,
   tempPageRetentionDays: 60,
   maxResults: 50,
-  excludedUrlPatterns: [
-    "^chrome://",
-    "^edge://",
-    "^about:",
-    "^file://",
-    "^chrome-extension://",
-    "^https://mail\\.google\\.com/",
-    "^https://outlook\\.live\\.com/",
-    "^https://.*\\.bank",
-    "^https://.*\\.edu.*/(login|auth|jw|jiaowu)"
+  excludedUrlRules: [
+    { id: "default-1", pattern: "^chrome://", enabled: true },
+    { id: "default-2", pattern: "^edge://", enabled: true },
+    { id: "default-3", pattern: "^about:", enabled: true },
+    { id: "default-4", pattern: "^file://", enabled: true },
+    { id: "default-5", pattern: "^chrome-extension://", enabled: true },
+    { id: "default-6", pattern: "^https://mail\\.google\\.com/", enabled: true },
+    { id: "default-7", pattern: "^https://outlook\\.live\\.com/", enabled: true },
+    { id: "default-8", pattern: "^https://.*\\.bank", enabled: true },
+    { id: "default-9", pattern: "^https://.*\\.edu.*/(login|auth|jw|jiaowu)", enabled: true }
   ]
 }
 ```
 
-排除规则使用正则字符串,设置页提示"每行一个正则"。
+排除规则按条目保存。设置页中每条规则可单独编辑、保存、删除、启用或停用。URL 排除判断只使用 `enabled === true` 且正则合法的规则;新增或修改排除规则只影响之后的页面采集,不会自动删除已经保存的历史页面。
 
-`saveContentEnabled` 控制是否保存原始正文:
+设置页普通设置即时保存:
 
-- 开启时,保存 `content`,允许使用全文查询,并能生成更准确的正文匹配片段。
-- 关闭时,不保存 `content`,全文查询在 UI 中不可选择;分词查询仍可使用已保存的 `titleWords` 和 `contentWords`。
-- 如果用户关闭该选项后已有旧正文数据,设置页提供独立的"清空已保存正文"动作,并做二次确认,避免用户误以为关闭开关会自动删除历史正文。
+- checkbox 切换后立即写入 `chrome.storage.local`。
+- 数字输入在 blur 时校验正整数,合法才写入。
+- 保存成功使用右上角弹出后自动消失的轻量 toast,不占用页面布局空间。
+- URL 规则编辑使用条目级保存,不被普通设置即时保存误提交。
+
+`saveContentEnabled` 控制是否保存原始全文:
+
+- 开启时,保存 `content`,允许使用全文查询,并能生成更准确的全文匹配片段。
+- 关闭时,不新增或覆盖 `content`,全文查询在 UI 中不可选择;分词查询仍会更新 `titleWords` 和 `contentWords`。
+- 如果用户关闭该选项后已有旧全文数据,保存流程会保留旧全文;设置页提供独立的"清空已保存全文"动作,并做二次确认,避免用户误以为关闭开关会自动删除历史全文。
 
 ## 5. 页面采集模块
 
@@ -212,13 +227,13 @@ content script 运行在普通网页:
 → 读取设置
 → 检查 URL 是否应排除
 → 检查是否启用自动保存
-→ 提取正文
+→ 提取全文
 → 发送 capturePage 消息给 background
 → background 判断书签状态
 → background 分词并写入 IndexedDB
 ```
 
-正文提取策略:
+全文提取策略:
 
 1. 使用自研完整文本采集工具 `lib/extract.ts`,不使用 `@mozilla/readability`。
 2. 策略偏召回:优先保留可见或近似可见的完整文本,服务全文搜索找回页面。
@@ -228,19 +243,19 @@ content script 运行在普通网页:
 6. 保留 `nav`、`header`、`footer`、`aside` 等区域的文本,因为 FAQ、课程目录、工具说明等内容可能出现在这些区域。
 7. 递归遍历 DOM 树,按节点顺序收集文本节点内容,并对块级元素自动插入换行。
 8. 采集 `input[value/placeholder]`、`textarea[value/placeholder]`、`img[alt]`、`button[value/aria-label/title]`、`[aria-label]`、`[title]` 等可见语义文本。
-9. 对正文做基础清理:统一换行、合并过多空白、去掉空行和首尾空白。
-10. 如果正文为空或长度过短,跳过保存。
-11. 如果 `saveContentEnabled` 为关闭,正文只在本次保存流程中用于分词,不持久化保存。
+9. 对全文做基础清理:统一换行、合并过多空白、去掉空行和首尾空白。
+10. 如果全文为空或长度过短,跳过保存。
+11. 如果 `saveContentEnabled` 为关闭,全文只在本次保存流程中用于分词,不持久化保存。
 
 阈值:
 
 - 标题为空不阻止保存。
-- 正文少于 20 个字符时跳过保存。
-- 单页正文上限当前固定为 1 MiB 字符串,避免异常页面撑爆存储。
+- 全文少于 20 个字符时跳过保存。
+- 单页全文上限当前固定为 1 MiB 字符串,避免异常页面撑爆存储。
 
 ## 6. URL 排除模块
 
-排除判断尽早发生在 content script 中,避免敏感页面正文被发送到 background。
+排除判断尽早发生在 content script 中,避免敏感页面全文被发送到 background。
 
 默认排除:
 
@@ -255,7 +270,7 @@ content script 运行在普通网页:
 
 - content script 的 `matches` 写 `<all_urls>`,但代码中二次检查。
 - 排除规则容错:单条非法正则不导致整个采集流程崩溃。
-- 不做云同步,不上传正文。
+- 不做云同步,不上传全文。
 
 ## 7. 分词查询模块
 
@@ -287,7 +302,7 @@ score =
 简化实现:
 
 - 标题命中优先。
-- 正文命中其次。
+- 全文命中其次。
 - 命中词越多越靠前。
 - 访问时间越近越靠前。
 - 书签页面加少量权重。
@@ -364,7 +379,7 @@ async function searchPages(request: SearchRequest) {
 
 全文查询由用户手动选择,不作为默认模式。
 
-全文查询依赖已保存的原始正文 `content`。当设置中的 `saveContentEnabled` 为关闭时:
+全文查询依赖已保存的原始全文 `content`。当设置中的 `saveContentEnabled` 为关闭时:
 
 - popup 中的全文查询选项置灰或隐藏。
 - 如果当前模式已经是全文查询,自动切回分词查询。
@@ -382,7 +397,7 @@ async function searchPages(request: SearchRequest) {
 → 返回前 maxResults 条
 ```
 
-在 background 中直接扫描已保存正文,配合 `maxResults` 控制返回数量。
+在 background 中直接扫描已保存全文,配合 `maxResults` 控制返回数量。
 
 短查询策略:
 
@@ -405,7 +420,7 @@ async function searchPages(request: SearchRequest) {
 
 - 对分词结果逐个在 content 中查找。
 - 使用最早或得分最高的命中位置生成片段。
-- 如果正文中没有找到,退回标题或 URL。
+- 如果全文中没有找到,退回标题或 URL。
 
 高亮实现原则:
 
@@ -413,7 +428,7 @@ async function searchPages(request: SearchRequest) {
 - React 中将标题和片段切片渲染为普通 text node 和 `<mark>`。
 - query 或 token 按文本处理,不作为 HTML 注入。
 - 高亮匹配大小写不敏感,但展示原文大小写。
-- 当分词查询只命中标题而正文片段无法解释命中时,片段回退为标题,保证结果能说明为什么匹配。
+- 当分词查询只命中标题而全文片段无法解释命中时,片段回退为标题,保证结果能说明为什么匹配。
 
 ## 10. popup 模块
 
@@ -424,7 +439,7 @@ popup 是主入口,宽度 420px,高度 500px 左右。
 - 搜索输入框、搜索方式菜单和搜索按钮同处一行,高度一致。
 - 搜索方式菜单默认选择 `分词`,可切换 `全文`,不额外显示"搜索模式"字样。
 - 顶部保留设置入口。
-- 当"保存正文"关闭时,`全文查询` 不可选择,并显示简短提示。
+- 当"保存全文"关闭时,`全文查询` 不可选择,并显示简短提示。
 - 当选择 `全文查询` 且搜索框为空时,使用 placeholder 显示 `按 Enter 或点击触发搜索`。
 - 结果列表。
 - 初始未搜索时,结果区域显示低不透明度应用图标、主标题和分词/全文模式提示。
@@ -457,7 +472,7 @@ popup 是主入口,宽度 420px,高度 500px 左右。
 - 非书签页面保存天数。
 - 最大搜索结果数。
 - URL/域名排除规则。
-- 是否保存正文。
+- 是否保存全文。
 - 本地空间占用统计。
 - 清空本地数据。
 
@@ -468,13 +483,13 @@ popup 是主入口,宽度 420px,高度 500px 左右。
 - IndexedDB 已用空间估算值。
 - 浏览器分配给扩展存储的 quota 估算值。
 - 已保存页面数量。
-- 已保存正文数量。
+- 已保存全文数量。
 
 实现方式:
 
 - 优先使用 `navigator.storage.estimate()` 获取 `usage` 和 `quota`。
 - 页面数量通过 `db.pages.count()` 获取。
-- 正文数量通过统计 `pageContents` 中 `content` 非空的记录获取。
+- 全文数量通过统计 `pageContents` 中 `content` 非空的记录获取。
 - 统计值只作为估算,不需要精确到每张表的字节数。
 
 ## 12. background 消息协议
@@ -568,11 +583,11 @@ Manifest 权限:
 
 性能保护:
 
-- 正文长度上限。
+- 全文长度上限。
 - 全文查询使用直接扫描。
 - 搜索结果数量上限。
 - popup 中分词查询使用 300ms 输入防抖控制查询频率。
-- popup 中全文查询保持手动触发,避免输入过程中频繁扫描正文。
+- popup 中全文查询保持手动触发,避免输入过程中频繁扫描全文。
 - 非书签页面过期清理。
 
 存储保护:
@@ -580,4 +595,4 @@ Manifest 权限:
 - 非书签页面默认保存 60 天。
 - 清理逻辑在启动、保存新页面或打开 popup 时触发。
 - options 页显示本地空间占用统计,帮助用户判断是否需要清理数据。
-- 不压缩正文。
+- 不压缩全文。

@@ -67,9 +67,15 @@ export async function savePageWithIndexes(
 
     const pageId = await db.pages.put(pageRecord)
 
+    const existingContent = pageId
+      ? await db.pageContents.where("pageId").equals(pageId).first()
+      : undefined
+
     await db.pageContents.put({
       pageId,
-      content: settings.saveContentEnabled ? capturedPage.content : undefined,
+      content: settings.saveContentEnabled
+        ? capturedPage.content
+        : existingContent?.content,
       titleWords,
       contentWords
     })

@@ -15,7 +15,7 @@ function captureCurrentPage(): void {
       if (!settings.autoSaveEnabled) return
 
       const url = window.location.href
-      if (isUrlExcluded(url, settings.excludedUrlPatterns)) return
+      if (isUrlExcluded(url, settings.excludedUrlRules)) return
 
       const snapshot = extractPageSnapshot({
         document,

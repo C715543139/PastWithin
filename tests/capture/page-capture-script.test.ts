@@ -74,7 +74,7 @@ describe("pageCapture content script", () => {
         expect(getSettingsMock).toHaveBeenCalled()
         expect(isUrlExcludedMock).toHaveBeenCalledWith(
             "https://example.com/article",
-            defaultSettings.excludedUrlPatterns
+            defaultSettings.excludedUrlRules
         )
         expect(extractPageSnapshotMock).toHaveBeenCalled()
         expect(sendMessageMock).toHaveBeenCalledWith({

@@ -299,7 +299,7 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
 
         {fulltextDisabled && (
           <div className="search-form-disabled-hint" aria-live="polite">
-            保存正文关闭，全文查询不可用
+            保存全文关闭，全文查询不可用
           </div>
         )}
       </form>

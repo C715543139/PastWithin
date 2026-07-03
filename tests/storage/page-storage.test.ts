@@ -81,6 +81,36 @@ describe("IndexedDB page storage", () => {
     expect(page?.visitTime).toBe(bookmarkedCapturedArticle.visitTime + 1_000)
   })
 
+  it("keeps previously saved fulltext content when fulltext saving is disabled", async () => {
+    db = createPastWithinDb(uniqueDbName("keep-existing-content"))
+
+    await savePageWithIndexes(bookmarkedCapturedArticle, {
+      db,
+      settings: defaultSettings,
+      splitWords: testSplitWords
+    })
+
+    await savePageWithIndexes(
+      {
+        ...bookmarkedCapturedArticle,
+        title: "PyTorch 调试记录",
+        content: "torch.randint 报错发生在 PyTorch 张量生成逻辑中。",
+        visitTime: bookmarkedCapturedArticle.visitTime + 1_000
+      },
+      {
+        db,
+        settings: { ...defaultSettings, saveContentEnabled: false },
+        splitWords: testSplitWords
+      }
+    )
+
+    const page = await getPageByNormalizedUrl(db, NORMALIZED_ARTICLE_URL)
+    const content = await getPageContent(db, page!.id!)
+
+    expect(content?.content).toContain("老师发的基础换道控制器")
+    expect(content?.contentWords).toEqual(expect.arrayContaining(["torch", "randint"]))
+  })
+
   it("can clear all local page data", async () => {
     db = createPastWithinDb(uniqueDbName("clear-data"))
 

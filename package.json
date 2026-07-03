@@ -11,7 +11,7 @@
   },
   "manifest": {
     "name": "PastWithin",
-    "description": "本地优先的 Chrome 历史和书签正文搜索工具",
+    "description": "本地优先的 Chrome 历史和书签全文搜索工具",
     "permissions": [
       "storage",
       "bookmarks",

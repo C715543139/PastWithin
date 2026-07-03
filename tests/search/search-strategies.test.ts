@@ -103,7 +103,7 @@ describe("search strategies", () => {
       {
         url: "https://example.com/title-only",
         title: "PyTorch 调试",
-        content: "这里记录一个没有相关分词命中的普通正文。",
+        content: "这里记录一个没有相关分词命中的普通全文。",
         visitTime: bookmarkedCapturedArticle.visitTime,
         isBookmarked: false
       },

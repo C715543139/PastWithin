@@ -13,20 +13,31 @@ describe("url exclusion rules", () => {
     "https://mail.google.com/mail/u/0/#inbox",
     "https://portal.edu.cn/login"
   ])("excludes sensitive or unsupported url: %s", (url) => {
-    expect(isUrlExcluded(url, defaultSettings.excludedUrlPatterns)).toBe(true)
+    expect(isUrlExcluded(url, defaultSettings.excludedUrlRules)).toBe(true)
   })
 
   it("allows ordinary http and https pages", () => {
-    expect(isUrlExcluded("https://example.com/course/path-planning", defaultSettings.excludedUrlPatterns)).toBe(false)
-    expect(isUrlExcluded("http://localhost:5173/debug", defaultSettings.excludedUrlPatterns)).toBe(false)
+    expect(isUrlExcluded("https://example.com/course/path-planning", defaultSettings.excludedUrlRules)).toBe(false)
+    expect(isUrlExcluded("http://localhost:5173/debug", defaultSettings.excludedUrlRules)).toBe(false)
   })
 
   it("ignores invalid user regex rules instead of failing all capture checks", () => {
     expect(() =>
-      isUrlExcluded("https://example.com/course", ["[invalid-regex", "^https://example\\.com/private"])
+      isUrlExcluded("https://example.com/course", [
+        { id: "bad", pattern: "[invalid-regex", enabled: true },
+        { id: "private", pattern: "^https://example\\.com/private", enabled: true }
+      ])
     ).not.toThrow()
 
-    expect(isUrlExcluded("https://example.com/private/page", ["[invalid-regex", "^https://example\\.com/private"])).toBe(true)
+    expect(isUrlExcluded("https://example.com/private/page", [
+      { id: "bad", pattern: "[invalid-regex", enabled: true },
+      { id: "private", pattern: "^https://example\\.com/private", enabled: true }
+    ])).toBe(true)
+  })
+
+  it("ignores disabled rules", () => {
+    expect(isUrlExcluded("https://example.com/private/page", [
+      { id: "private", pattern: "^https://example\\.com/private", enabled: false }
+    ])).toBe(false)
   })
 })
-

@@ -182,7 +182,7 @@ describe("popup search app", () => {
 
     expect(screen.getByRole("option", { name: "全文" })).toBeDisabled()
     expect(screen.getByRole("combobox", { name: "搜索方式" })).toHaveValue("token")
-    expect(screen.getByText(/保存正文关闭/)).toBeInTheDocument()
+    expect(screen.getByText(/保存全文关闭/)).toBeInTheDocument()
 
     await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "Main.gd:328 total_len")
     await user.click(screen.getByRole("button", { name: "搜索" }))

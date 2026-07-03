@@ -22,7 +22,7 @@ const defaultAppSettings: AppSettings = {
     saveContentEnabled: true,
     tempPageRetentionDays: 60,
     maxResults: 50,
-    excludedUrlPatterns: []
+    excludedUrlRules: []
 }
 const getSettingsMock = vi.fn().mockResolvedValue(defaultAppSettings)
 const saveSettingsMock = vi.fn().mockResolvedValue(undefined)
@@ -162,7 +162,9 @@ describe("background message dispatcher", () => {
             saveContentEnabled: true,
             tempPageRetentionDays: 30,
             maxResults: 20,
-            excludedUrlPatterns: ["^chrome://"]
+            excludedUrlRules: [
+                { id: "chrome", pattern: "^chrome://", enabled: true }
+            ]
         }
 
         const response = await sendMessage({ type: "saveSettings", payload })

@@ -13,7 +13,7 @@ const settings: AppSettings = {
     saveContentEnabled: true,
     tempPageRetentionDays: 60,
     maxResults: 50,
-    excludedUrlPatterns: []
+    excludedUrlRules: []
 }
 
 interface RuntimeMock {

@@ -31,7 +31,15 @@ export interface AppSettings {
   saveContentEnabled: boolean
   tempPageRetentionDays: number
   maxResults: number
-  excludedUrlPatterns: string[]
+  excludedUrlRules: UrlRule[]
+}
+
+export interface UrlRule {
+  id: string
+  pattern: string
+  enabled: boolean
+  createdAt?: number
+  updatedAt?: number
 }
 
 export interface SearchRequest {
@@ -58,4 +66,3 @@ export interface StorageStats {
   pageCount: number
   contentCount: number
 }
-

@@ -52,9 +52,9 @@ npx tsc --noEmit
 
 ## 已覆盖能力
 
-- 页面标题、URL、正文、访问时间和书签状态采集。
+- 页面标题、URL、全文、访问时间和书签状态采集。
 - URL/域名排除规则。
-- IndexedDB 页面数据、正文和分词索引保存。
+- IndexedDB 页面数据、全文和分词索引保存。
 - 分词查询和全文查询。
 - 搜索结果字段、匹配片段和高亮。
 - popup 搜索入口的基本交互。
@@ -63,9 +63,9 @@ npx tsc --noEmit
 - 书签状态查询包装层（`chrome.bookmarks` 不可用与异常容错）。
 - 设置读写包装层（`chrome.storage.local` 合并默认值与异常容错）。
 - background 消息分发（`capturePage`/`search`/`clearData`/`clearSavedContent`/`getStats`/`getSettings`/`saveSettings` 及未知类型）。
-- content script 采集入口（自动保存开关、URL 排除、正文为空跳过）。
+- content script 采集入口（自动保存开关、URL 排除、全文为空跳过）。
 - popup 挂载入口（设置加载、初始化错误、打开选项页、搜索转发）。
-- options 设置页（设置/统计加载、保存、清空数据与清空正文二次确认、排除规则编辑、加载失败提示）。
+- options 设置页（设置/统计加载、保存、清空数据与清空全文二次确认、排除规则编辑、加载失败提示）。
 
 ## 覆盖率
 

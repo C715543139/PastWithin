@@ -1,6 +1,13 @@
 import "@testing-library/jest-dom/vitest"
 
-import { render, screen, waitFor, within } from "@testing-library/react"
+import {
+    fireEvent,
+    render,
+    screen,
+    waitFor,
+    waitForElementToBeRemoved,
+    within
+} from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -13,7 +20,9 @@ const defaultAppSettings: AppSettings = {
     saveContentEnabled: true,
     tempPageRetentionDays: 60,
     maxResults: 50,
-    excludedUrlPatterns: ["^chrome://"]
+    excludedUrlRules: [
+        { id: "chrome", pattern: "^chrome://", enabled: true }
+    ]
 }
 
 const stats: StorageStats = {
@@ -80,6 +89,7 @@ describe("options index", () => {
     })
 
     afterEach(() => {
+        vi.useRealTimers()
         delete (globalThis as { chrome?: unknown }).chrome
     })
 
@@ -102,13 +112,13 @@ describe("options index", () => {
         )
         expect(document.title).toBe("PastWithin 扩展设置")
         expect(screen.getByLabelText("自动保存访问页面")).toBeChecked()
-        expect(screen.getByLabelText("保存正文")).toBeChecked()
+        expect(screen.getByLabelText("保存全文")).toBeChecked()
         expect(screen.getByText(/已保存页面数：5/)).toBeInTheDocument()
-        expect(screen.getByText(/已保存正文数：3/)).toBeInTheDocument()
+        expect(screen.getByText(/已保存全文数：3/)).toBeInTheDocument()
         expect(screen.getByText(/2.00 MB/)).toBeInTheDocument()
     })
 
-    it("saves settings via saveSettings message when the save button is clicked", async () => {
+    it("saves checkbox settings immediately when changed", async () => {
         const sendMessage = createRuntime()
         const user = userEvent.setup()
 
@@ -117,14 +127,56 @@ describe("options index", () => {
         await waitFor(() =>
             expect(screen.getByLabelText("自动保存访问页面")).toBeInTheDocument()
         )
-        await user.click(screen.getByRole("button", { name: "保存设置" }))
+        await user.click(screen.getByLabelText("自动保存访问页面"))
 
         await waitFor(() =>
-            expect(screen.getByText("设置已保存")).toBeInTheDocument()
+            expect(screen.getByRole("status")).toHaveTextContent(/自动保存于/)
         )
+        expect(sendMessage).toHaveBeenCalledWith(
+            expect.objectContaining({
+                type: "saveSettings",
+                payload: expect.objectContaining({ autoSaveEnabled: false })
+            }),
+            expect.any(Function)
+        )
+
+        await waitForElementToBeRemoved(() => screen.queryByRole("status"), {
+            timeout: 3000
+        })
+    })
+
+    it("saves valid number settings on blur and rejects invalid values", async () => {
+        const sendMessage = createRuntime()
+        const user = userEvent.setup()
+
+        render(<OptionsIndex />)
+
+        const maxResults = await screen.findByLabelText("最大搜索结果数")
+        await user.clear(maxResults)
+        await user.type(maxResults, "25")
+        await user.tab()
+
+        await waitFor(() =>
+            expect(sendMessage).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    type: "saveSettings",
+                    payload: expect.objectContaining({ maxResults: 25 })
+                }),
+                expect.any(Function)
+            )
+        )
+
+        const retentionDays = screen.getByLabelText("非书签页面保存天数")
+        await user.clear(retentionDays)
+        await user.type(retentionDays, "0")
+        await user.tab()
+
+        expect(screen.getByText("请输入正整数")).toBeInTheDocument()
         expect(
-            sendMessage.mock.calls.some(([m]) => m.type === "saveSettings")
-        ).toBe(true)
+            sendMessage.mock.calls.some(
+                ([m]) => m.type === "saveSettings" && m.payload?.tempPageRetentionDays === 0
+            )
+        ).toBe(false)
     })
 
     it("clears all data after confirming the dangerous action", async () => {
@@ -174,12 +226,12 @@ describe("options index", () => {
         render(<OptionsIndex />)
 
         await waitFor(() =>
-            expect(screen.getByRole("button", { name: "清空已保存正文" })).toBeInTheDocument()
+            expect(screen.getByRole("button", { name: "清空已保存全文" })).toBeInTheDocument()
         )
-        await user.click(screen.getByRole("button", { name: "清空已保存正文" }))
+        await user.click(screen.getByRole("button", { name: "清空已保存全文" }))
 
         await waitFor(() =>
-            expect(screen.getByText("已保存正文已清空")).toBeInTheDocument()
+            expect(screen.getByText("已保存全文已清空")).toBeInTheDocument()
         )
         expect(confirmSpy).toHaveBeenCalled()
         expect(
@@ -187,8 +239,8 @@ describe("options index", () => {
         ).toBe(true)
     })
 
-    it("updates excluded url patterns when editing the textarea", async () => {
-        createRuntime()
+    it("adds a url rule after validating the new row", async () => {
+        const sendMessage = createRuntime()
         const user = userEvent.setup()
 
         render(<OptionsIndex />)
@@ -196,11 +248,108 @@ describe("options index", () => {
         await waitFor(() =>
             expect(screen.getByRole("heading", { name: "URL 排除规则" })).toBeInTheDocument()
         )
-        const textarea = screen.getByRole("textbox") as HTMLTextAreaElement
-        await user.clear(textarea)
-        await user.type(textarea, "^https://private\\\\.example")
+        await user.click(screen.getByRole("button", { name: "添加规则" }))
 
-        expect(textarea.value).toContain("^https://private")
+        const ruleInputs = screen.getAllByLabelText("URL 排除规则")
+        const draftInput = ruleInputs[ruleInputs.length - 1]
+        fireEvent.change(draftInput, { target: { value: "[invalid" } })
+        await user.click(within(draftInput.closest(".url-rule-item") as HTMLElement).getByRole("button", { name: "保存" }))
+
+        expect(screen.getByText(/正则表达式无效/)).toBeInTheDocument()
+
+        fireEvent.change(draftInput, {
+            target: { value: "^https://private\\.example" }
+        })
+        await user.click(within(draftInput.closest(".url-rule-item") as HTMLElement).getByRole("button", { name: "保存" }))
+
+        await waitFor(() =>
+            expect(sendMessage).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    type: "saveSettings",
+                    payload: expect.objectContaining({
+                        excludedUrlRules: expect.arrayContaining([
+                            expect.objectContaining({
+                                pattern: "^https://private\\.example",
+                                enabled: true
+                            })
+                        ])
+                    })
+                }),
+                expect.any(Function)
+            )
+        )
+    })
+
+    it("edits, disables, and deletes existing url rules", async () => {
+        const sendMessage = createRuntime()
+        const user = userEvent.setup()
+
+        render(<OptionsIndex />)
+
+        const ruleInput = await screen.findByDisplayValue("^chrome://")
+        await user.clear(ruleInput)
+        await user.type(ruleInput, "^edge://")
+        const ruleItem = ruleInput.closest(".url-rule-item") as HTMLElement
+        await user.click(within(ruleItem).getByRole("button", { name: "保存" }))
+
+        await waitFor(() =>
+            expect(sendMessage).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    type: "saveSettings",
+                    payload: expect.objectContaining({
+                        excludedUrlRules: [
+                            expect.objectContaining({ pattern: "^edge://", enabled: true })
+                        ]
+                    })
+                }),
+                expect.any(Function)
+            )
+        )
+
+        await user.click(within(ruleItem).getByLabelText("启用规则"))
+        await waitFor(() =>
+            expect(sendMessage).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    type: "saveSettings",
+                    payload: expect.objectContaining({
+                        excludedUrlRules: [
+                            expect.objectContaining({ pattern: "^edge://", enabled: false })
+                        ]
+                    })
+                }),
+                expect.any(Function)
+            )
+        )
+
+        await user.click(within(ruleItem).getByRole("button", { name: "删除" }))
+        await waitFor(() =>
+            expect(sendMessage).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    type: "saveSettings",
+                    payload: expect.objectContaining({ excludedUrlRules: [] })
+                }),
+                expect.any(Function)
+            )
+        )
+
+        expect(screen.queryByDisplayValue("^edge://")).not.toBeInTheDocument()
+    })
+
+    it("rejects duplicate url rules", async () => {
+        createRuntime()
+        const user = userEvent.setup()
+
+        render(<OptionsIndex />)
+
+        await screen.findByRole("heading", { name: "URL 排除规则" })
+        await user.click(screen.getByRole("button", { name: "添加规则" }))
+
+        const ruleInputs = screen.getAllByLabelText("URL 排除规则")
+        const draftInput = ruleInputs[ruleInputs.length - 1]
+        fireEvent.change(draftInput, { target: { value: "^chrome://" } })
+        await user.click(within(draftInput.closest(".url-rule-item") as HTMLElement).getByRole("button", { name: "保存" }))
+
+        expect(screen.getByText("该规则已存在")).toBeInTheDocument()
     })
 
     it("shows an error banner when loading settings fails", async () => {

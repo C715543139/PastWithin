@@ -1,7 +1,11 @@
-export function isUrlExcluded(url: string, patterns: string[]): boolean {
-  for (const pattern of patterns) {
+import type { UrlRule } from "./types"
+
+export function isUrlExcluded(url: string, rules: UrlRule[]): boolean {
+  for (const rule of rules) {
+    if (!rule.enabled) continue
+
     try {
-      if (new RegExp(pattern).test(url)) {
+      if (new RegExp(rule.pattern).test(url)) {
         return true
       }
     } catch {
@@ -11,4 +15,3 @@ export function isUrlExcluded(url: string, patterns: string[]): boolean {
 
   return false
 }
-

@@ -41,7 +41,9 @@ describe("settings", () => {
         expect(defaultSettings.saveContentEnabled).toBe(true)
         expect(defaultSettings.tempPageRetentionDays).toBe(60)
         expect(defaultSettings.maxResults).toBe(50)
-        expect(defaultSettings.excludedUrlPatterns).toContain("^chrome://")
+        expect(defaultSettings.excludedUrlRules).toContainEqual(
+            expect.objectContaining({ pattern: "^chrome://", enabled: true })
+        )
     })
 
     it("getSettings merges stored values over defaults", async () => {
@@ -55,6 +57,39 @@ describe("settings", () => {
         expect(settings.maxResults).toBe(100)
         expect(settings.saveContentEnabled).toBe(false)
         expect(settings.autoSaveEnabled).toBe(true)
+    })
+
+    it("normalizes stored url rules and ignores empty rule objects", async () => {
+        const stored = {
+            excludedUrlRules: [
+                { id: "mail", pattern: " ^https://mail\\.google\\.com/ ", enabled: true },
+                { id: "empty", pattern: " " },
+                { id: "invalid", pattern: "[invalid" }
+            ]
+        }
+        const get = vi.fn().mockResolvedValue({ [STORAGE_KEY]: stored })
+        mockChromeStorage({ local: { get, set: vi.fn().mockResolvedValue(undefined) } })
+
+        const settings = await getSettings()
+
+        expect(settings.excludedUrlRules).toEqual([
+            expect.objectContaining({
+                id: "mail",
+                pattern: "^https://mail\\.google\\.com/",
+                enabled: true
+            })
+        ])
+    })
+
+    it("falls back to default url rules when stored rules are not in the new shape", async () => {
+        const get = vi.fn().mockResolvedValue({
+            [STORAGE_KEY]: { excludedUrlRules: ["^chrome://"] }
+        })
+        mockChromeStorage({ local: { get, set: vi.fn().mockResolvedValue(undefined) } })
+
+        const settings = await getSettings()
+
+        expect(settings.excludedUrlRules).toEqual(defaultSettings.excludedUrlRules)
     })
 
     it("getSettings returns defaults when storage is empty", async () => {
