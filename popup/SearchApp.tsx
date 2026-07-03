@@ -253,7 +253,9 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
   const showInitialHint =
     !hasSearched && !loading && !error && !pendingShortQuery
   const searchPlaceholder =
-    !fulltextDisabled && mode === "fulltext"
+    fulltextDisabled
+      ? "保存全文关闭，全文查询不可用"
+      : mode === "fulltext"
       ? "按 Enter 或点击触发搜索"
       : ""
 
@@ -296,12 +298,6 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
             搜索
           </button>
         </div>
-
-        {fulltextDisabled && (
-          <div className="search-form-disabled-hint" aria-live="polite">
-            保存全文关闭，全文查询不可用
-          </div>
-        )}
       </form>
 
       <div className="search-results">

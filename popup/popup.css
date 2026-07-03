@@ -128,20 +128,6 @@ input[type="text"] {
   color: #94a3b8;
 }
 
-.search-form-disabled-hint {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 2;
-  padding: 2px 4px;
-  color: #52606d;
-  background: rgb(255 255 255 / 92%);
-  border-radius: 4px;
-  font-size: 12px;
-  line-height: 1.4;
-  pointer-events: none;
-}
-
 .popup-btn {
   padding: 6px 16px;
   font: inherit;
