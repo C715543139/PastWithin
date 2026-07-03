@@ -60,6 +60,14 @@ function renderHighlightedText(
   return parts.length > 0 ? parts : text
 }
 
+function getUrlHost(url: string): string {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return url
+  }
+}
+
 export function SearchApp({ settings, searchClient }: SearchAppProps) {
   const [query, setQuery] = useState("")
   const [mode, setMode] = useState<SearchRequest["mode"]>("token")
@@ -186,93 +194,104 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
   }
 
   return (
-    <div>
-      <form onSubmit={handleSubmit}>
-        <input
-          role="searchbox"
-          aria-label="搜索"
-          type="text"
-          value={query}
-          onChange={(event) => updateQuery(event.target.value)}
-          onCompositionStart={() => setIsComposing(true)}
-          onCompositionEnd={(event) => {
-            setIsComposing(false)
-            updateQuery(event.currentTarget.value)
-          }}
-        />
+    <div className="search-app">
+      <form onSubmit={handleSubmit} className="search-form">
+        <div className="search-controls">
+          <input
+            className="search-input"
+            role="searchbox"
+            aria-label="搜索"
+            type="text"
+            value={query}
+            onChange={(event) => updateQuery(event.target.value)}
+            onCompositionStart={() => setIsComposing(true)}
+            onCompositionEnd={(event) => {
+              setIsComposing(false)
+              updateQuery(event.currentTarget.value)
+            }}
+          />
 
-        <fieldset>
-          <legend>搜索模式</legend>
-          <label>
-            <input
-              type="radio"
-              name="searchMode"
-              checked={mode === "token"}
-              onChange={() => updateMode("token")}
-            />
-            分词查询
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="searchMode"
-              checked={mode === "fulltext"}
-              onChange={() => updateMode("fulltext")}
-              disabled={fulltextDisabled}
-            />
-            全文查询
-          </label>
-        </fieldset>
+          <div className="search-mode-wrapper">
+            <select
+              className="search-mode-select"
+              aria-label="搜索方式"
+              value={fulltextDisabled ? "token" : mode}
+              onChange={(event) =>
+                updateMode(event.target.value as SearchRequest["mode"])
+              }
+            >
+              <option value="token">分词</option>
+              <option value="fulltext" disabled={fulltextDisabled}>
+                全文
+              </option>
+            </select>
+          </div>
+
+          <button type="submit" className="popup-btn popup-btn-primary">
+            搜索
+          </button>
+        </div>
 
         {fulltextDisabled && <p>保存正文关闭，全文查询不可用</p>}
         {!fulltextDisabled && mode === "fulltext" && (
-          <p>请按 Enter 或点击全文搜索。</p>
+          <p>请按 Enter 或点击搜索</p>
         )}
-
-        <button type="submit" className="popup-btn popup-btn-primary">
-          搜索
-        </button>
       </form>
 
-      {pendingShortQuery && (
-        <div role="alert" className="short-query-confirm">
-          <p>全文查询词较短，可能命中大量页面并花费更久。</p>
-          <div className="short-query-actions">
-            <button
-              type="button"
-              onClick={handleConfirmShortQuery}
-              className="popup-btn popup-btn-primary"
-            >
-              继续全文搜索
-            </button>
-            <button
-              type="button"
-              onClick={handleCancelShortQuery}
-              className="popup-btn popup-btn-secondary"
-            >
-              取消
-            </button>
+      <div className="search-results">
+        {pendingShortQuery && (
+          <div role="alert" className="short-query-confirm">
+            <p>全文查询词较短，可能命中大量页面并花费更久。</p>
+            <div className="short-query-actions">
+              <button
+                type="button"
+                onClick={handleConfirmShortQuery}
+                className="popup-btn popup-btn-primary"
+              >
+                继续全文搜索
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelShortQuery}
+                className="popup-btn popup-btn-secondary"
+              >
+                取消
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {error && <p role="alert">搜索出错: {error}</p>}
-      {loading && <p>搜索中...</p>}
-      {hasSearched && !loading && !error && results.length === 0 && (
-        <p>暂无搜索结果</p>
-      )}
+        {error && <p role="alert">搜索出错: {error}</p>}
+        {loading && <p>搜索中...</p>}
+        {hasSearched && !loading && !error && results.length === 0 && (
+          <p>暂无搜索结果</p>
+        )}
 
-      {results.map((result) => (
-        <article key={result.id} aria-label={result.title}>
-          <a href={result.url} target="_blank" rel="noopener noreferrer">
-            {renderHighlightedText(result.title, result.highlights)}
-          </a>
-          <div>{result.url}</div>
-          <div>{new Date(result.visitTime).toLocaleString()}</div>
-          {result.isBookmarked && <span aria-label="已收藏">★</span>}
-          <div>{renderHighlightedText(result.snippet, result.highlights)}</div>
-        </article>
-      ))}
+        {results.map((result) => (
+          <article key={result.id} aria-label={result.title} className="result-item">
+            <div className="result-title-row">
+              {result.isBookmarked && (
+                <span className="bookmark-badge">已收藏</span>
+              )}
+              <a href={result.url} target="_blank" rel="noopener noreferrer">
+                {renderHighlightedText(result.title, result.highlights)}
+              </a>
+            </div>
+            <div className="result-meta-row">
+              <div className="result-url" title={result.url}>
+                {getUrlHost(result.url)}
+              </div>
+              <span className="result-meta-separator">·</span>
+              <div className="result-meta">
+                {new Date(result.visitTime).toLocaleString()}
+              </div>
+            </div>
+            <div className="result-snippet">
+              {renderHighlightedText(result.snippet, result.highlights)}
+            </div>
+          </article>
+        ))}
+      </div>
     </div>
   )
 }

@@ -100,12 +100,26 @@ export default function PopupIndex() {
     <div className="popup-container">
       <header className="popup-header">
         <h1>PastWithin</h1>
-        <button type="button" onClick={openSettings} className="settings-btn">
-          设置
-        </button>
+        <div className="popup-header-actions">
+          <button
+            type="button"
+            className="help-btn"
+            aria-label="搜索帮助"
+            data-tooltip="分词适合关键词和主题；全文适合连续片段、代码和短词。"
+          >
+            ?
+          </button>
+          <button
+            type="button"
+            onClick={openSettings}
+            className="settings-btn"
+            aria-label="设置"
+          >
+            ⚙
+          </button>
+        </div>
       </header>
       <SearchApp settings={settings} searchClient={searchClient} />
     </div>
   )
 }
-

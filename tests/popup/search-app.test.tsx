@@ -32,11 +32,13 @@ describe("popup search app", () => {
     )
 
     expect(screen.getByRole("searchbox", { name: /搜索/ })).toBeInTheDocument()
-    expect(screen.getByRole("radio", { name: "分词查询" })).toBeChecked()
-    expect(screen.getByRole("radio", { name: "全文查询" })).toBeEnabled()
+    expect(screen.queryByText("搜索模式")).not.toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: "搜索方式" })).toHaveValue("token")
+    expect(screen.getByRole("option", { name: "分词" })).toBeEnabled()
+    expect(screen.getByRole("option", { name: "全文" })).toBeEnabled()
   })
 
-  it("sends token search requests and renders title, url, visit time, bookmark mark, and snippet", async () => {
+  it("sends token search requests and renders title, url, visit time, bookmark badge, and snippet", async () => {
     const user = userEvent.setup()
     const searchClient = vi.fn().mockResolvedValue({ results: [result] })
 
@@ -56,9 +58,10 @@ describe("popup search app", () => {
     const titleLink = within(item).getByRole("link", { name: "路径规划课程笔记" })
     expect(titleLink).toHaveAttribute("href", result.url)
     expect(within(titleLink).getByText("路径规划").tagName).toBe("MARK")
-    expect(within(item).getByText(result.url)).toBeInTheDocument()
+    expect(within(item).getByText("example.com")).toBeInTheDocument()
     expect(within(item).getByText(new Date(VISIT_TIME).toLocaleString())).toBeInTheDocument()
-    expect(within(item).getByLabelText("已收藏")).toBeInTheDocument()
+    expect(item.textContent?.startsWith("已收藏")).toBe(true)
+    expect(within(item).queryByText("★")).not.toBeInTheDocument()
     expect(within(item).getAllByText("路径规划")).toHaveLength(2)
   })
 
@@ -68,7 +71,7 @@ describe("popup search app", () => {
 
     render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
 
-    await user.click(screen.getByRole("radio", { name: "全文查询" }))
+    await user.selectOptions(screen.getByRole("combobox", { name: "搜索方式" }), "fulltext")
     await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "Main.gd:328 total_len")
     await user.click(screen.getByRole("button", { name: "搜索" }))
 
@@ -117,7 +120,8 @@ describe("popup search app", () => {
       />
     )
 
-    expect(screen.getByRole("radio", { name: "全文查询" })).toBeDisabled()
+    expect(screen.getByRole("option", { name: "全文" })).toBeDisabled()
+    expect(screen.getByRole("combobox", { name: "搜索方式" })).toHaveValue("token")
     expect(screen.getByText(/保存正文关闭/)).toBeInTheDocument()
 
     await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "Main.gd:328 total_len")
@@ -192,8 +196,10 @@ describe("popup search app", () => {
 
     render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
 
-    fireEvent.click(screen.getByRole("radio", { name: "全文查询" }))
-    expect(screen.getByText(/按 Enter 或点击全文搜索/)).toBeInTheDocument()
+    fireEvent.change(screen.getByRole("combobox", { name: "搜索方式" }), {
+      target: { value: "fulltext" }
+    })
+    expect(screen.getByText(/按 Enter 或点击搜索/)).toBeInTheDocument()
 
     fireEvent.change(screen.getByRole("searchbox", { name: /搜索/ }), {
       target: { value: "Main.gd:328 total_len" }
@@ -220,7 +226,7 @@ describe("popup search app", () => {
 
     render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
 
-    await user.click(screen.getByRole("radio", { name: "全文查询" }))
+    await user.selectOptions(screen.getByRole("combobox", { name: "搜索方式" }), "fulltext")
     await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "R2")
     await user.click(screen.getByRole("button", { name: "搜索" }))
 
@@ -243,7 +249,7 @@ describe("popup search app", () => {
 
     render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
 
-    await user.click(screen.getByRole("radio", { name: "全文查询" }))
+    await user.selectOptions(screen.getByRole("combobox", { name: "搜索方式" }), "fulltext")
     await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "tf")
     await user.click(screen.getByRole("button", { name: "搜索" }))
     await user.click(screen.getByRole("button", { name: "取消" }))
@@ -259,7 +265,7 @@ describe("popup search app", () => {
     render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
 
     const searchbox = screen.getByRole("searchbox", { name: /搜索/ })
-    await user.click(screen.getByRole("radio", { name: "全文查询" }))
+    await user.selectOptions(screen.getByRole("combobox", { name: "搜索方式" }), "fulltext")
     await user.type(searchbox, "tf")
     await user.click(screen.getByRole("button", { name: "搜索" }))
 
