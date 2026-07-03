@@ -31,10 +31,11 @@ describe("popup search app", () => {
   })
 
   it("provides the popup search entry with query input and search mode controls", () => {
-    render(
+    const searchClient = vi.fn().mockResolvedValue({ results: [] })
+    const { container } = render(
       <SearchApp
         settings={defaultSettings}
-        searchClient={vi.fn().mockResolvedValue({ results: [] })}
+        searchClient={searchClient}
       />
     )
 
@@ -43,6 +44,12 @@ describe("popup search app", () => {
     expect(screen.getByRole("combobox", { name: "搜索方式" })).toHaveValue("token")
     expect(screen.getByRole("option", { name: "分词" })).toBeEnabled()
     expect(screen.getByRole("option", { name: "全文" })).toBeEnabled()
+    expect(screen.getByText("在 PastWithin 中搜索过去浏览过的页面")).toBeInTheDocument()
+    expect(screen.queryByText(/快速找回历史页面内容/)).not.toBeInTheDocument()
+    expect(screen.getByText("分词：")).toBeInTheDocument()
+    expect(screen.getByText("全文：")).toBeInTheDocument()
+    expect(container.querySelector(".initial-search-icon")).not.toBeNull()
+    expect(searchClient).not.toHaveBeenCalled()
   })
 
   it("sends token search requests and renders title, url, visit time, bookmark badge, and snippet", async () => {
@@ -252,7 +259,10 @@ describe("popup search app", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "搜索方式" }), {
       target: { value: "fulltext" }
     })
-    expect(screen.getByText(/按 Enter 或点击搜索/)).toBeInTheDocument()
+    expect(screen.getByRole("searchbox", { name: /搜索/ })).toHaveAttribute(
+      "placeholder",
+      "按 Enter 或点击触发搜索"
+    )
 
     fireEvent.change(screen.getByRole("searchbox", { name: /搜索/ }), {
       target: { value: "Main.gd:328 total_len" }

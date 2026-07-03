@@ -73,7 +73,7 @@ describe("popup index", () => {
             expect(screen.getByRole("searchbox", { name: /搜索/ })).toBeInTheDocument()
         )
         expect(screen.getByText("PastWithin")).toBeInTheDocument()
-        expect(screen.getByRole("button", { name: "搜索帮助" })).toBeInTheDocument()
+        expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument()
     })
 
     it("shows an init error when reading settings fails", async () => {

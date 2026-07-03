@@ -3,3 +3,7 @@ declare module "*.css" {
   export default content
 }
 
+declare module "*.png" {
+  const src: string
+  export default src
+}

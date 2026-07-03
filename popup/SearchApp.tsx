@@ -7,6 +7,7 @@ import {
   type SyntheticEvent
 } from "react"
 
+import appIconUrl from "../assets/icon.png"
 import { getFaviconUrl } from "../lib/favicon"
 import type { AppSettings, SearchRequest, SearchResult } from "../lib/types"
 
@@ -98,6 +99,29 @@ function ResultFavicon({ url }: { url: string }) {
         </svg>
       )}
     </span>
+  )
+}
+
+function InitialSearchHint() {
+  return (
+    <section className="initial-search-hint" aria-label="搜索提示">
+      <img
+        className="initial-search-icon"
+        src={appIconUrl}
+        alt=""
+        aria-hidden="true"
+      />
+
+      <h2>在 PastWithin 中搜索过去浏览过的页面</h2>
+      <div className="initial-search-modes">
+        <div>
+          <strong>分词：</strong>更快速，适合关键词匹配
+        </div>
+        <div>
+          <strong>全文：</strong>更精确，适合精准性查询
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -226,6 +250,13 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
     setPendingShortQuery(null)
   }
 
+  const showInitialHint =
+    !hasSearched && !loading && !error && !pendingShortQuery
+  const searchPlaceholder =
+    !fulltextDisabled && mode === "fulltext"
+      ? "按 Enter 或点击触发搜索"
+      : ""
+
   return (
     <div className="search-app">
       <form onSubmit={handleSubmit} className="search-form">
@@ -236,6 +267,7 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
             aria-label="搜索"
             type="text"
             value={query}
+            placeholder={searchPlaceholder}
             onChange={(event) => updateQuery(event.target.value)}
             onCompositionStart={() => setIsComposing(true)}
             onCompositionEnd={(event) => {
@@ -265,13 +297,16 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
           </button>
         </div>
 
-        {fulltextDisabled && <p>保存正文关闭，全文查询不可用</p>}
-        {!fulltextDisabled && mode === "fulltext" && (
-          <p>请按 Enter 或点击搜索</p>
+        {fulltextDisabled && (
+          <div className="search-form-disabled-hint" aria-live="polite">
+            保存正文关闭，全文查询不可用
+          </div>
         )}
       </form>
 
       <div className="search-results">
+        {showInitialHint && <InitialSearchHint />}
+
         {pendingShortQuery && (
           <div role="alert" className="short-query-confirm">
             <p>全文查询词较短，可能命中大量页面并花费更久。</p>
@@ -294,10 +329,14 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
           </div>
         )}
 
-        {error && <p role="alert">搜索出错: {error}</p>}
-        {loading && <p>搜索中...</p>}
+        {error && (
+          <p role="alert" className="search-status search-status-error">
+            搜索出错: {error}
+          </p>
+        )}
+        {loading && <p className="search-status">搜索中...</p>}
         {hasSearched && !loading && !error && results.length === 0 && (
-          <p>暂无搜索结果</p>
+          <p className="search-status">暂无搜索结果</p>
         )}
 
         {results.map((result) => {
