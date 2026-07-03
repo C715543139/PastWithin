@@ -430,8 +430,9 @@ popup 是主入口,宽度 420px,高度 500px 左右。
 
 结果项展示:
 
-- 标题,命中词高亮;书签页面在标题前显示 `已收藏` 徽标。
-- 域名和访问时间同一行展示,中间用 `·` 分隔;完整 URL 保留在标题链接和域名悬停提示中。
+- 域名与访问时间位于结果顶部右侧两行展示。
+- favicon 使用圆形浅灰背景,与域名和访问时间两行垂直居中组成结果顶部区域;图标获取失败时显示通用地球图标;书签页面在顶部区域右侧显示垂直居中的 `已收藏` 徽标。
+- 标题独立一行展示,点击后打开完整 URL。
 - 匹配片段,命中词高亮,过长时限制显示行数。
 
 交互:
@@ -545,7 +546,7 @@ Manifest 权限:
 
 ```json
 {
-  "permissions": ["storage", "bookmarks", "tabs"],
+  "permissions": ["storage", "bookmarks", "tabs", "favicon"],
   "host_permissions": ["http://*/*", "https://*/*"]
 }
 ```
@@ -555,6 +556,7 @@ Manifest 权限:
 - `storage` 用于设置。
 - `bookmarks` 用于判断书签状态。
 - `tabs` 用于读取当前标签信息或打开结果。
+- `favicon` 用于通过 Chrome 内置 favicon URL 显示搜索结果图标。
 - `host_permissions` 用于普通网页 content script。
 
 不申请远程 API 相关权限。

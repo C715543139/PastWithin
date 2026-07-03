@@ -7,6 +7,7 @@ import {
   type SyntheticEvent
 } from "react"
 
+import { getFaviconUrl } from "../lib/favicon"
 import type { AppSettings, SearchRequest, SearchResult } from "../lib/types"
 
 type SearchClient = (
@@ -66,6 +67,38 @@ function getUrlHost(url: string): string {
   } catch {
     return url
   }
+}
+
+function ResultFavicon({ url }: { url: string }) {
+  const [loadFailed, setLoadFailed] = useState(false)
+  const faviconUrl = getFaviconUrl(url)
+  const showFavicon = faviconUrl && !loadFailed
+
+  return (
+    <span className="result-favicon-frame" aria-hidden="true">
+      {showFavicon ? (
+        <img
+          className="result-favicon"
+          src={faviconUrl}
+          alt=""
+          width={16}
+          height={16}
+          onError={() => setLoadFailed(true)}
+        />
+      ) : (
+        <svg
+          className="result-favicon-fallback"
+          viewBox="0 0 24 24"
+          focusable="false"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M3 12h18" />
+          <path d="M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9" />
+          <path d="M12 3c-2.5 2.7-3.8 5.7-3.8 9s1.3 6.3 3.8 9" />
+        </svg>
+      )}
+    </span>
+  )
 }
 
 export function SearchApp({ settings, searchClient }: SearchAppProps) {
@@ -267,30 +300,41 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
           <p>暂无搜索结果</p>
         )}
 
-        {results.map((result) => (
-          <article key={result.id} aria-label={result.title} className="result-item">
-            <div className="result-title-row">
-              {result.isBookmarked && (
-                <span className="bookmark-badge">已收藏</span>
-              )}
-              <a href={result.url} target="_blank" rel="noopener noreferrer">
-                {renderHighlightedText(result.title, result.highlights)}
-              </a>
-            </div>
-            <div className="result-meta-row">
-              <div className="result-url" title={result.url}>
-                {getUrlHost(result.url)}
+        {results.map((result) => {
+          return (
+            <article key={result.id} aria-label={result.title} className="result-item">
+              <div className="result-top-row">
+                <ResultFavicon url={result.url} />
+                <div className="result-meta-info">
+                  <div className="result-domain-row">
+                    <div className="result-url" title={result.url}>
+                      {getUrlHost(result.url)}
+                    </div>
+                  </div>
+                  <div className="result-meta">
+                    {new Date(result.visitTime).toLocaleString()}
+                  </div>
+                </div>
+                {result.isBookmarked && (
+                  <span className="bookmark-badge">已收藏</span>
+                )}
               </div>
-              <span className="result-meta-separator">·</span>
-              <div className="result-meta">
-                {new Date(result.visitTime).toLocaleString()}
+              <div className="result-title-row">
+                <a
+                  href={result.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={result.url}
+                >
+                  {renderHighlightedText(result.title, result.highlights)}
+                </a>
               </div>
-            </div>
-            <div className="result-snippet">
-              {renderHighlightedText(result.snippet, result.highlights)}
-            </div>
-          </article>
-        ))}
+              <div className="result-snippet">
+                {renderHighlightedText(result.snippet, result.highlights)}
+              </div>
+            </article>
+          )
+        })}
       </div>
     </div>
   )

@@ -18,9 +18,16 @@ const result = {
   score: 12
 }
 
+function mockChromeRuntimeId(id: string) {
+  ;(globalThis as { chrome?: unknown }).chrome = {
+    runtime: { id }
+  }
+}
+
 describe("popup search app", () => {
   afterEach(() => {
     vi.useRealTimers()
+    delete (globalThis as { chrome?: unknown }).chrome
   })
 
   it("provides the popup search entry with query input and search mode controls", () => {
@@ -40,6 +47,7 @@ describe("popup search app", () => {
 
   it("sends token search requests and renders title, url, visit time, bookmark badge, and snippet", async () => {
     const user = userEvent.setup()
+    mockChromeRuntimeId("extension-id")
     const searchClient = vi.fn().mockResolvedValue({ results: [result] })
 
     render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
@@ -55,14 +63,59 @@ describe("popup search app", () => {
     )
 
     const item = await screen.findByRole("article", { name: "路径规划课程笔记" })
+    const favicon = item.querySelector(".result-favicon")
+    expect(favicon).not.toBeNull()
+    expect(favicon).toHaveAttribute(
+      "src",
+      expect.stringContaining("chrome-extension://extension-id/_favicon/")
+    )
+    expect(favicon).toHaveAttribute(
+      "src",
+      expect.stringContaining(encodeURIComponent(result.url))
+    )
     const titleLink = within(item).getByRole("link", { name: "路径规划课程笔记" })
     expect(titleLink).toHaveAttribute("href", result.url)
+    expect(titleLink).toHaveAttribute("title", result.url)
     expect(within(titleLink).getByText("路径规划").tagName).toBe("MARK")
     expect(within(item).getByText("example.com")).toBeInTheDocument()
     expect(within(item).getByText(new Date(VISIT_TIME).toLocaleString())).toBeInTheDocument()
-    expect(item.textContent?.startsWith("已收藏")).toBe(true)
+    expect(within(item).getByText("已收藏")).toBeInTheDocument()
     expect(within(item).queryByText("★")).not.toBeInTheDocument()
     expect(within(item).getAllByText("路径规划")).toHaveLength(2)
+  })
+
+  it("shows a globe fallback when favicon loading fails", async () => {
+    const user = userEvent.setup()
+    mockChromeRuntimeId("extension-id")
+    const searchClient = vi.fn().mockResolvedValue({ results: [result] })
+
+    render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
+
+    await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "路径规划")
+    await user.click(screen.getByRole("button", { name: "搜索" }))
+
+    const item = await screen.findByRole("article", { name: "路径规划课程笔记" })
+    const favicon = item.querySelector(".result-favicon")
+    expect(favicon).not.toBeNull()
+
+    fireEvent.error(favicon as Element)
+
+    expect(item.querySelector(".result-favicon")).toBeNull()
+    expect(item.querySelector(".result-favicon-fallback")).not.toBeNull()
+  })
+
+  it("shows a globe fallback when the extension favicon URL is unavailable", async () => {
+    const user = userEvent.setup()
+    const searchClient = vi.fn().mockResolvedValue({ results: [result] })
+
+    render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
+
+    await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "路径规划")
+    await user.click(screen.getByRole("button", { name: "搜索" }))
+
+    const item = await screen.findByRole("article", { name: "路径规划课程笔记" })
+    expect(item.querySelector(".result-favicon")).toBeNull()
+    expect(item.querySelector(".result-favicon-fallback")).not.toBeNull()
   })
 
   it("sends fulltext search requests when the user selects fulltext mode", async () => {

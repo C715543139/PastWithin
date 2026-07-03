@@ -247,9 +247,7 @@ input[type="text"] {
 }
 
 .result-title-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  margin-top: 4px;
   min-width: 0;
 }
 
@@ -257,6 +255,7 @@ input[type="text"] {
   min-width: 0;
   color: #1f6feb;
   font-weight: 600;
+  line-height: 1.45;
   text-decoration: none;
   word-break: break-all;
 }
@@ -266,9 +265,10 @@ input[type="text"] {
   display: inline-flex;
   justify-content: center;
   align-items: center;
+  align-self: center;
   padding: 2px 4px;
-  color: #64748b;
-  background: #f1f5f9;
+  color: #7a899e;
+  background: #f7f7f7;
   border: 1px solid #cbd5e1;
   border-radius: 999px;
   font-size: 10px;
@@ -276,18 +276,57 @@ input[type="text"] {
   line-height: 1;
 }
 
-.result-meta-row,
-.result-snippet {
-  margin-top: 3px;
-  color: #52606d;
-  font-size: 12px;
-}
-
-.result-meta-row {
+.result-top-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 7px;
   min-width: 0;
+}
+
+.result-favicon-frame {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: #f7f7f7;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+}
+
+.result-favicon {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+}
+
+.result-favicon-fallback {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: #7a899e;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.result-meta-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.result-domain-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #52606d;
+  font-size: 11px;
+  line-height: 1.2;
 }
 
 .result-url {
@@ -299,20 +338,19 @@ input[type="text"] {
   word-break: normal;
 }
 
-.result-meta-separator {
-  flex: 0 0 auto;
-}
-
 .result-meta {
   flex: 0 0 auto;
+  color: #52606d;
+  font-size: 11px;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
 .result-snippet {
+  margin-top: 3px;
+  color: #52606d;
+  font-size: 12px;
   word-break: break-all;
-}
-
-.result-snippet {
   display: -webkit-box;
   overflow: hidden;
   line-clamp: 3;

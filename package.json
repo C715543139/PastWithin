@@ -15,7 +15,8 @@
     "permissions": [
       "storage",
       "bookmarks",
-      "tabs"
+      "tabs",
+      "favicon"
     ],
     "host_permissions": [
       "http://*/*",
