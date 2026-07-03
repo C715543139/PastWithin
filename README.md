@@ -2,6 +2,10 @@
 
 一个轻量、本地优先的 Chrome 插件,用于保存用户浏览过的普通网页全文,并支持通过全文关键词、连续片段、代码片段或短关键词找回页面。
 
+<p align="center">
+  <img src="docs/images/main-page.png" alt="PastWithin 主页面截图">
+</p>
+
 ## 功能特性
 
 - **自动采集**:自动保存访问网页的标题、URL、全文、访问时间和书签状态
