@@ -7,7 +7,9 @@ import {
   createPastWithinDb,
   getPageByNormalizedUrl,
   getPageContent,
-  savePageWithIndexes
+  savePageWithIndexes,
+  syncBookmarkStatuses,
+  updateBookmarkStatusByUrl
 } from "../../background/db"
 import {
   NORMALIZED_ARTICLE_URL,
@@ -124,5 +126,254 @@ describe("IndexedDB page storage", () => {
 
     expect(await db.pages.count()).toBe(0)
     expect(await db.pageContents.count()).toBe(0)
+  })
+
+  describe("updateBookmarkStatusByUrl", () => {
+    it("updates isBookmarked from false to true for an existing page", async () => {
+      db = createPastWithinDb(uniqueDbName("bm-update-true"))
+
+      await savePageWithIndexes(
+        { ...bookmarkedCapturedArticle, isBookmarked: false },
+        { db, settings: defaultSettings, splitWords: testSplitWords }
+      )
+
+      const result = await updateBookmarkStatusByUrl(
+        db,
+        bookmarkedCapturedArticle.url,
+        true
+      )
+
+      expect(result).toBe(true)
+
+      const page = await getPageByNormalizedUrl(db, NORMALIZED_ARTICLE_URL)
+      expect(page?.isBookmarked).toBe(true)
+    })
+
+    it("updates isBookmarked from true to false for an existing page", async () => {
+      db = createPastWithinDb(uniqueDbName("bm-update-false"))
+
+      await savePageWithIndexes(bookmarkedCapturedArticle, {
+        db,
+        settings: defaultSettings,
+        splitWords: testSplitWords
+      })
+
+      const result = await updateBookmarkStatusByUrl(
+        db,
+        bookmarkedCapturedArticle.url,
+        false
+      )
+
+      expect(result).toBe(true)
+
+      const page = await getPageByNormalizedUrl(db, NORMALIZED_ARTICLE_URL)
+      expect(page?.isBookmarked).toBe(false)
+    })
+
+    it("returns false when the URL does not match any page", async () => {
+      db = createPastWithinDb(uniqueDbName("bm-update-missing"))
+
+      const result = await updateBookmarkStatusByUrl(
+        db,
+        "https://not-saved.com/page",
+        true
+      )
+
+      expect(result).toBe(false)
+      expect(await db.pages.count()).toBe(0)
+    })
+
+    it("does not write when status is already the same", async () => {
+      db = createPastWithinDb(uniqueDbName("bm-update-noop"))
+
+      await savePageWithIndexes(bookmarkedCapturedArticle, {
+        db,
+        settings: defaultSettings,
+        splitWords: testSplitWords
+      })
+
+      const pageBefore = await getPageByNormalizedUrl(
+        db,
+        NORMALIZED_ARTICLE_URL
+      )
+      const updatedAtBefore = pageBefore!.updatedAt
+
+      const result = await updateBookmarkStatusByUrl(
+        db,
+        bookmarkedCapturedArticle.url,
+        true
+      )
+
+      expect(result).toBe(true)
+
+      const pageAfter = await getPageByNormalizedUrl(db, NORMALIZED_ARTICLE_URL)
+      expect(pageAfter?.updatedAt).toBe(updatedAtBefore)
+    })
+
+    it("matches by normalizedUrl even when input URL has a hash", async () => {
+      db = createPastWithinDb(uniqueDbName("bm-update-hash"))
+
+      await savePageWithIndexes(
+        { ...bookmarkedCapturedArticle, isBookmarked: false },
+        { db, settings: defaultSettings, splitWords: testSplitWords }
+      )
+
+      const result = await updateBookmarkStatusByUrl(
+        db,
+        `${NORMALIZED_ARTICLE_URL}#some-section`,
+        true
+      )
+
+      expect(result).toBe(true)
+
+      const page = await getPageByNormalizedUrl(db, NORMALIZED_ARTICLE_URL)
+      expect(page?.isBookmarked).toBe(true)
+    })
+
+    it("does not modify visitTime", async () => {
+      db = createPastWithinDb(uniqueDbName("bm-update-visittime"))
+
+      await savePageWithIndexes(
+        { ...bookmarkedCapturedArticle, isBookmarked: false },
+        { db, settings: defaultSettings, splitWords: testSplitWords }
+      )
+
+      const pageBefore = await getPageByNormalizedUrl(
+        db,
+        NORMALIZED_ARTICLE_URL
+      )
+      const visitTimeBefore = pageBefore!.visitTime
+
+      await updateBookmarkStatusByUrl(db, bookmarkedCapturedArticle.url, true)
+
+      const pageAfter = await getPageByNormalizedUrl(db, NORMALIZED_ARTICLE_URL)
+      expect(pageAfter?.visitTime).toBe(visitTimeBefore)
+    })
+  })
+
+  describe("syncBookmarkStatuses", () => {
+    it("updates pages whose isBookmarked differs from the bookmarked set", async () => {
+      db = createPastWithinDb(uniqueDbName("sync-diff"))
+
+      await savePageWithIndexes(
+        { ...bookmarkedCapturedArticle, isBookmarked: false },
+        { db, settings: defaultSettings, splitWords: testSplitWords }
+      )
+
+      const result = await syncBookmarkStatuses(db, [
+        bookmarkedCapturedArticle.url
+      ])
+
+      expect(result.checkedCount).toBe(1)
+      expect(result.updatedCount).toBe(1)
+
+      const page = await getPageByNormalizedUrl(db, NORMALIZED_ARTICLE_URL)
+      expect(page?.isBookmarked).toBe(true)
+    })
+
+    it("returns updatedCount=0 when all statuses already match", async () => {
+      db = createPastWithinDb(uniqueDbName("sync-nodiff"))
+
+      await savePageWithIndexes(bookmarkedCapturedArticle, {
+        db,
+        settings: defaultSettings,
+        splitWords: testSplitWords
+      })
+
+      const result = await syncBookmarkStatuses(db, [
+        bookmarkedCapturedArticle.url
+      ])
+
+      expect(result.checkedCount).toBe(1)
+      expect(result.updatedCount).toBe(0)
+
+      const page = await getPageByNormalizedUrl(db, NORMALIZED_ARTICLE_URL)
+      expect(page?.isBookmarked).toBe(true)
+    })
+
+    it("sets isBookmarked to false when URL is not in the bookmarked set", async () => {
+      db = createPastWithinDb(uniqueDbName("sync-unmark"))
+
+      await savePageWithIndexes(bookmarkedCapturedArticle, {
+        db,
+        settings: defaultSettings,
+        splitWords: testSplitWords
+      })
+
+      const result = await syncBookmarkStatuses(db, [])
+
+      expect(result.checkedCount).toBe(1)
+      expect(result.updatedCount).toBe(1)
+
+      const page = await getPageByNormalizedUrl(db, NORMALIZED_ARTICLE_URL)
+      expect(page?.isBookmarked).toBe(false)
+    })
+
+    it("matches by normalizedUrl (hash differences are ignored)", async () => {
+      db = createPastWithinDb(uniqueDbName("sync-hash"))
+
+      await savePageWithIndexes(
+        { ...bookmarkedCapturedArticle, isBookmarked: false },
+        { db, settings: defaultSettings, splitWords: testSplitWords }
+      )
+
+      const result = await syncBookmarkStatuses(db, [
+        `${NORMALIZED_ARTICLE_URL}#different-section`
+      ])
+
+      expect(result.checkedCount).toBe(1)
+      expect(result.updatedCount).toBe(1)
+
+      const page = await getPageByNormalizedUrl(db, NORMALIZED_ARTICLE_URL)
+      expect(page?.isBookmarked).toBe(true)
+    })
+
+    it("only updates pages with status changes", async () => {
+      db = createPastWithinDb(uniqueDbName("sync-partial"))
+
+      const url2 = "https://other-site.com/page"
+
+      await savePageWithIndexes(bookmarkedCapturedArticle, {
+        db,
+        settings: defaultSettings,
+        splitWords: testSplitWords
+      })
+
+      await savePageWithIndexes(
+        {
+          ...bookmarkedCapturedArticle,
+          url: url2,
+          isBookmarked: false
+        },
+        { db, settings: defaultSettings, splitWords: testSplitWords }
+      )
+
+      const result = await syncBookmarkStatuses(db, [
+        bookmarkedCapturedArticle.url,
+        url2
+      ])
+
+      expect(result.checkedCount).toBe(2)
+      expect(result.updatedCount).toBe(1)
+    })
+
+    it("does not modify visitTime", async () => {
+      db = createPastWithinDb(uniqueDbName("sync-visittime"))
+
+      await savePageWithIndexes(
+        { ...bookmarkedCapturedArticle, isBookmarked: false },
+        { db, settings: defaultSettings, splitWords: testSplitWords }
+      )
+
+      const pageBefore = await getPageByNormalizedUrl(
+        db,
+        NORMALIZED_ARTICLE_URL
+      )
+
+      await syncBookmarkStatuses(db, [bookmarkedCapturedArticle.url])
+
+      const pageAfter = await getPageByNormalizedUrl(db, NORMALIZED_ARTICLE_URL)
+      expect(pageAfter?.visitTime).toBe(pageBefore!.visitTime)
+    })
   })
 })

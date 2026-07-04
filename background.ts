@@ -5,6 +5,10 @@ import {
   getStorageStats,
   savePageWithIndexes
 } from "./background/db"
+import {
+  registerBookmarkSync,
+  scheduleBookmarkStatusSync
+} from "./background/bookmarkSync"
 import { handleCapturedPageMessage } from "./background/capturePipeline"
 import { searchPages } from "./background/search"
 import { isUrlBookmarked } from "./lib/bookmarks"
@@ -13,6 +17,8 @@ import { getSettings, saveSettings } from "./lib/settings"
 import { splitWords } from "./lib/wordSplit"
 
 const db = createPastWithinDb("PastWithinDB")
+registerBookmarkSync({ db, isUrlBookmarked })
+scheduleBookmarkStatusSync({ db })
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   handleMessage(message as RuntimeMessage)

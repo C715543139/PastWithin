@@ -114,6 +114,50 @@ export async function clearSavedContent(db: PastWithinDb): Promise<void> {
   })
 }
 
+export async function updateBookmarkStatusByUrl(
+  db: PastWithinDb,
+  url: string,
+  isBookmarked: boolean
+): Promise<boolean> {
+  const normalizedUrl = normalizeUrl(url)
+  const page = await db.pages
+    .where("normalizedUrl")
+    .equals(normalizedUrl)
+    .first()
+
+  if (!page) return false
+
+  if (page.isBookmarked === isBookmarked) return true
+
+  await db.pages.update(page.id!, { isBookmarked, updatedAt: Date.now() })
+  return true
+}
+
+export async function syncBookmarkStatuses(
+  db: PastWithinDb,
+  bookmarkedUrls: string[]
+): Promise<{ checkedCount: number; updatedCount: number }> {
+  const normalizedBookmarked = new Set(
+    bookmarkedUrls.map((u) => normalizeUrl(u))
+  )
+
+  const pages = await db.pages.toArray()
+  let updatedCount = 0
+
+  for (const page of pages) {
+    const shouldBeBookmarked = normalizedBookmarked.has(page.normalizedUrl)
+    if (page.isBookmarked !== shouldBeBookmarked) {
+      await db.pages.update(page.id!, {
+        isBookmarked: shouldBeBookmarked,
+        updatedAt: Date.now()
+      })
+      updatedCount++
+    }
+  }
+
+  return { checkedCount: pages.length, updatedCount }
+}
+
 export async function getStorageStats(db: PastWithinDb): Promise<StorageStats> {
   const estimate =
     (await navigator.storage?.estimate?.()) ?? ({} as StorageEstimate)

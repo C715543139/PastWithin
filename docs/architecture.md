@@ -549,12 +549,35 @@ interface StorageStats {
 
 ## 13. 书签状态模块
 
-只保存 `isBookmarked` 字段,不做完整书签同步,也不在启动时批量导入书签。
+只保存 `isBookmarked` 字段,不做完整书签内容同步,也不在启动时批量导入书签页面。
 
 保存页面时:
 
 - background 使用 `chrome.bookmarks.search({ url })` 判断是否已收藏。
 - 写入 `isBookmarked`。
+
+运行期监听:
+
+- 注册 `chrome.bookmarks.onCreated` 监听:新书签创建时,通过 `updateBookmarkStatusByUrl` 更新已有页面 `isBookmarked = true`;只更新已采集过的页面,不创建新页面记录。
+- 注册 `chrome.bookmarks.onRemoved` 监听:书签删除时,先用 `chrome.bookmarks.search({ url })` 确认是否仍有其他同 URL 书签;若没有,则更新已有页面 `isBookmarked = false`。
+- 监听失败时 `console.warn`,不向外抛出异常,不阻塞 background 其他功能。
+- `chrome.bookmarks` 不可用时安全跳过。
+
+启动异步扫描:
+
+- Service Worker 启动后延迟执行(默认 3s),使用 `chrome.storage.local` 记录上次成功同步时间,实现 24h 节流。
+- 未到 24h 时跳过扫描。
+- 到期时调用 `chrome.bookmarks.getTree()` 收集所有书签 URL,与当前 `pages` 表中所有页面的 `isBookmarked` 做校准:只更新状态发生变化的已有页面,不创建页面、不抓取全文、不修改 `visitTime`、不重建索引。
+- 只有同步成功后写入 `pastWithinLastBookmarkStatusSyncAt` 时间戳。
+- 同步失败时 `console.warn`,并把失败时间和错误信息记录到 `pastWithinLastBookmarkStatusSyncError`,不影响 background 启动;失败不会写入成功同步时间,也不会继续用空书签集合校准数据库。
+
+约束:
+
+- 不创建页面:如果某个书签 URL 从未被采集过,同步时不会为其创建 pages 记录。
+- 不抓取全文:同步只更新 `isBookmarked` 字段,不触发页面采集、不访问网络。
+- 不修改 `visitTime`:同步不改变访问时间。
+- 状态没变化时不写入:避免无谓的 IndexedDB 事务。
+- URL 通过 `normalizeUrl` 归一化匹配(移除 hash),确保 hash 差异不影响书签状态判断。
 
 ## 14. 权限设计
 
