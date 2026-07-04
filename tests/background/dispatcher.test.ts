@@ -20,6 +20,7 @@ const defaultAppSettings: AppSettings = {
     autoSaveEnabled: true,
     saveBookmarkedOnly: false,
     saveContentEnabled: true,
+    maxContentLength: 1 * 1024 * 1024,
     tempPageRetentionDays: 60,
     maxResults: 50,
     excludedUrlRules: []
@@ -160,6 +161,7 @@ describe("background message dispatcher", () => {
             autoSaveEnabled: false,
             saveBookmarkedOnly: true,
             saveContentEnabled: true,
+            maxContentLength: 1 * 1024 * 1024,
             tempPageRetentionDays: 30,
             maxResults: 20,
             excludedUrlRules: [

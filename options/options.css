@@ -43,15 +43,21 @@ h2 {
   padding: 5px 0;
 }
 
-.options-field input[type="number"] {
+.options-field input[type="number"],
+.options-field select {
   width: 90px;
   padding: 5px 6px;
 }
 
 .options-field input[type="number"],
+.options-field select,
 .url-rule-row input[type="text"] {
   border: 1px solid #bcccdc;
   border-radius: 4px;
+}
+
+.options-field select {
+  background: #fff;
 }
 
 .options-hint {

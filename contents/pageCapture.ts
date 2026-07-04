@@ -21,7 +21,7 @@ function captureCurrentPage(): void {
         document,
         url,
         minContentLength: 20,
-        maxContentLength: 1_048_576
+        maxContentLength: settings.maxContentLength
       })
 
       if (!snapshot) return

@@ -18,6 +18,7 @@ const defaultAppSettings: AppSettings = {
     autoSaveEnabled: true,
     saveBookmarkedOnly: false,
     saveContentEnabled: true,
+    maxContentLength: 1 * 1024 * 1024,
     tempPageRetentionDays: 60,
     maxResults: 50,
     excludedUrlRules: [
@@ -113,6 +114,9 @@ describe("options index", () => {
         expect(document.title).toBe("PastWithin 扩展设置")
         expect(screen.getByLabelText("自动保存访问页面")).toBeChecked()
         expect(screen.getByLabelText("保存全文")).toBeChecked()
+        expect(screen.getByLabelText("单页全文大小上限")).toHaveValue(
+            String(1 * 1024 * 1024)
+        )
         expect(screen.getByText(/已保存页面数：5/)).toBeInTheDocument()
         expect(screen.getByText(/已保存全文数：3/)).toBeInTheDocument()
         expect(screen.getByText(/2.00 MB/)).toBeInTheDocument()
@@ -177,6 +181,29 @@ describe("options index", () => {
                 ([m]) => m.type === "saveSettings" && m.payload?.tempPageRetentionDays === 0
             )
         ).toBe(false)
+    })
+
+    it("saves the single-page fulltext size limit immediately", async () => {
+        const sendMessage = createRuntime()
+        const user = userEvent.setup()
+
+        render(<OptionsIndex />)
+
+        const limitSelect = await screen.findByLabelText("单页全文大小上限")
+        await user.selectOptions(limitSelect, String(2 * 1024 * 1024))
+
+        await waitFor(() =>
+            expect(sendMessage).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    type: "saveSettings",
+                    payload: expect.objectContaining({
+                        maxContentLength: 2 * 1024 * 1024
+                    })
+                }),
+                expect.any(Function)
+            )
+        )
+        expect(screen.getByText(/避免异常页面过度占用本地空间/)).toBeInTheDocument()
     })
 
     it("clears all data after confirming the dangerous action", async () => {

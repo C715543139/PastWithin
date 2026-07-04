@@ -53,6 +53,7 @@ export const defaultSettings = {
   autoSaveEnabled: true,
   saveBookmarkedOnly: false,
   saveContentEnabled: true,
+  maxContentLength: 1 * 1024 * 1024,
   tempPageRetentionDays: 60,
   maxResults: 50,
   excludedUrlRules: [

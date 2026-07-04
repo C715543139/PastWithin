@@ -29,6 +29,7 @@ export interface AppSettings {
   autoSaveEnabled: boolean
   saveBookmarkedOnly: boolean
   saveContentEnabled: boolean
+  maxContentLength: number
   tempPageRetentionDays: number
   maxResults: number
   excludedUrlRules: UrlRule[]

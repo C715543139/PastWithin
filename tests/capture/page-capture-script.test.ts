@@ -77,10 +77,30 @@ describe("pageCapture content script", () => {
             defaultSettings.excludedUrlRules
         )
         expect(extractPageSnapshotMock).toHaveBeenCalled()
+        expect(extractPageSnapshotMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                maxContentLength: defaultSettings.maxContentLength
+            })
+        )
         expect(sendMessageMock).toHaveBeenCalledWith({
             type: "capturePage",
             payload: expect.objectContaining({ url: "https://example.com" })
         })
+    })
+
+    it("passes the configured fulltext size limit to the extractor", async () => {
+        getSettingsMock.mockResolvedValueOnce({
+            ...defaultSettings,
+            maxContentLength: 512 * 1024
+        })
+
+        vi.resetModules()
+        await import("../../contents/pageCapture")
+        await vi.waitFor(() => expect(extractPageSnapshotMock).toHaveBeenCalled())
+
+        expect(extractPageSnapshotMock).toHaveBeenCalledWith(
+            expect.objectContaining({ maxContentLength: 512 * 1024 })
+        )
     })
 
     it("skips capture when auto-save is disabled", async () => {

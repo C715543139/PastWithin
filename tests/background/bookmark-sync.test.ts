@@ -343,10 +343,10 @@ describe("registerBookmarkSync", () => {
       }
     })
 
-    await flushMicrotasks()
-
-    const pageRemoved = await getPageByNormalizedUrl(db, NORMALIZED_ARTICLE_URL)
-    expect(pageRemoved?.isBookmarked).toBe(false)
+    await vi.waitFor(async () => {
+      const pageRemoved = await getPageByNormalizedUrl(db, NORMALIZED_ARTICLE_URL)
+      expect(pageRemoved?.isBookmarked).toBe(false)
+    })
   })
 
   it("keeps isBookmarked=true when bookmark is removed but another bookmark still has same url", async () => {
@@ -378,10 +378,10 @@ describe("registerBookmarkSync", () => {
       }
     })
 
-    await flushMicrotasks()
-
-    const pageKept = await getPageByNormalizedUrl(db, NORMALIZED_ARTICLE_URL)
-    expect(pageKept?.isBookmarked).toBe(true)
+    await vi.waitFor(async () => {
+      const pageKept = await getPageByNormalizedUrl(db, NORMALIZED_ARTICLE_URL)
+      expect(pageKept?.isBookmarked).toBe(true)
+    })
   })
 
   it("skips onRemoved when removed node has no url (folder)", async () => {

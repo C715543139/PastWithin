@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { defaultSettings, getSettings, saveSettings } from "../../lib/settings"
+import {
+    contentSizeOptions,
+    defaultSettings,
+    getSettings,
+    saveSettings
+} from "../../lib/settings"
 import type { AppSettings } from "../../lib/types"
 
 const STORAGE_KEY = "pastWithinSettings"
@@ -39,6 +44,13 @@ describe("settings", () => {
         expect(defaultSettings.autoSaveEnabled).toBe(true)
         expect(defaultSettings.saveBookmarkedOnly).toBe(false)
         expect(defaultSettings.saveContentEnabled).toBe(true)
+        expect(defaultSettings.maxContentLength).toBe(1 * 1024 * 1024)
+        expect(contentSizeOptions.map((option) => option.value)).toEqual([
+            512 * 1024,
+            1 * 1024 * 1024,
+            2 * 1024 * 1024,
+            5 * 1024 * 1024
+        ])
         expect(defaultSettings.tempPageRetentionDays).toBe(60)
         expect(defaultSettings.maxResults).toBe(50)
         expect(defaultSettings.excludedUrlRules).toContainEqual(
@@ -57,6 +69,17 @@ describe("settings", () => {
         expect(settings.maxResults).toBe(100)
         expect(settings.saveContentEnabled).toBe(false)
         expect(settings.autoSaveEnabled).toBe(true)
+    })
+
+    it("normalizes unsupported content size limits to the default", async () => {
+        const get = vi.fn().mockResolvedValue({
+            [STORAGE_KEY]: { maxContentLength: 12345 }
+        })
+        mockChromeStorage({ local: { get, set: vi.fn().mockResolvedValue(undefined) } })
+
+        const settings = await getSettings()
+
+        expect(settings.maxContentLength).toBe(defaultSettings.maxContentLength)
     })
 
     it("normalizes stored url rules and ignores empty rule objects", async () => {

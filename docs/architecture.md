@@ -166,6 +166,7 @@ interface AppSettings {
   autoSaveEnabled: boolean
   saveBookmarkedOnly: boolean
   saveContentEnabled: boolean
+  maxContentLength: number
   tempPageRetentionDays: number
   maxResults: number
   excludedUrlRules: UrlRule[]
@@ -187,6 +188,7 @@ const defaultSettings: AppSettings = {
   autoSaveEnabled: true,
   saveBookmarkedOnly: false,
   saveContentEnabled: true,
+  maxContentLength: 1 * 1024 * 1024,
   tempPageRetentionDays: 60,
   maxResults: 50,
   excludedUrlRules: [
@@ -209,6 +211,7 @@ const defaultSettings: AppSettings = {
 
 - checkbox 切换后立即写入 `chrome.storage.local`。
 - 数字输入在 blur 时校验正整数,合法才写入。
+- 单页全文大小上限使用固定选项即时保存:512 KiB、1 MiB、2 MiB、5 MiB;默认 1 MiB。
 - 保存成功使用右上角弹出后自动消失的轻量 toast,不占用页面布局空间。
 - URL 规则编辑使用条目级保存,不被普通设置即时保存误提交。
 
@@ -246,12 +249,13 @@ content script 运行在普通网页:
 9. 对全文做基础清理:统一换行、合并过多空白、去掉空行和首尾空白。
 10. 如果全文为空或长度过短,跳过保存。
 11. 如果 `saveContentEnabled` 为关闭,全文只在本次保存流程中用于分词,不持久化保存。
+12. `maxContentLength` 控制单页全文截断上限,由 content script 从设置读取后传入提取器。
 
 阈值:
 
 - 标题为空不阻止保存。
 - 全文少于 20 个字符时跳过保存。
-- 单页全文上限当前固定为 1 MiB 字符串,避免异常页面撑爆存储。
+- 单页全文上限默认 1 MiB,可在设置页选择 512 KiB、1 MiB、2 MiB、5 MiB,避免异常页面过度占用 IndexedDB。
 
 ## 6. URL 排除模块
 

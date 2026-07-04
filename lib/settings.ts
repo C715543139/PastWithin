@@ -2,6 +2,15 @@ import type { AppSettings, UrlRule } from "./types"
 
 const STORAGE_KEY = "pastWithinSettings"
 
+export const contentSizeOptions = [
+  { value: 512 * 1024, label: "512 KiB" },
+  { value: 1 * 1024 * 1024, label: "1 MiB" },
+  { value: 2 * 1024 * 1024, label: "2 MiB" },
+  { value: 5 * 1024 * 1024, label: "5 MiB" }
+]
+
+const DEFAULT_MAX_CONTENT_LENGTH = 1 * 1024 * 1024
+
 const DEFAULT_URL_PATTERNS = [
   "^chrome://",
   "^edge://",
@@ -18,6 +27,7 @@ export const defaultSettings: AppSettings = {
   autoSaveEnabled: true,
   saveBookmarkedOnly: false,
   saveContentEnabled: true,
+  maxContentLength: DEFAULT_MAX_CONTENT_LENGTH,
   tempPageRetentionDays: 60,
   maxResults: 50,
   excludedUrlRules: DEFAULT_URL_PATTERNS.map((pattern, index) =>
@@ -31,6 +41,12 @@ function createUrlRule(pattern: string, id: string): UrlRule {
     pattern,
     enabled: true
   }
+}
+
+function normalizeMaxContentLength(value: unknown): number {
+  return contentSizeOptions.some((option) => option.value === value)
+    ? (value as number)
+    : DEFAULT_MAX_CONTENT_LENGTH
 }
 
 function normalizeUrlRules(value: unknown): UrlRule[] | null {
@@ -75,6 +91,7 @@ function normalizeSettings(value: unknown): AppSettings {
   return {
     ...defaultSettings,
     ...stored,
+    maxContentLength: normalizeMaxContentLength(stored.maxContentLength),
     excludedUrlRules:
       normalizeUrlRules(stored.excludedUrlRules) ??
       defaultSettings.excludedUrlRules

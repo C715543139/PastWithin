@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 
 import type { AppSettings, StorageStats, UrlRule } from "../lib/types"
-import { defaultSettings } from "../lib/settings"
+import { contentSizeOptions, defaultSettings } from "../lib/settings"
 
 import "./options.css"
 
@@ -381,6 +381,25 @@ export default function OptionsIndex() {
           />
           保存全文
         </label>
+        <label className="options-field">
+          <span>单页全文大小上限</span>
+          <select
+            aria-label="单页全文大小上限"
+            value={settings.maxContentLength}
+            onChange={(event) =>
+              updateSetting("maxContentLength", Number(event.target.value))
+            }
+          >
+            {contentSizeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="options-hint">
+          用于限制单个页面保存的全文长度，避免异常页面过度占用本地空间。
+        </p>
         <label className="options-field">
           <span>非书签页面保存天数</span>
           <input
