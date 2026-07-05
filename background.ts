@@ -10,9 +10,15 @@ import {
   scheduleBookmarkStatusSync
 } from "./background/bookmarkSync"
 import { handleCapturedPageMessage } from "./background/capturePipeline"
-import { searchPages } from "./background/search"
+import { searchPages, streamFulltextSearch } from "./background/search"
 import { isUrlBookmarked } from "./lib/bookmarks"
-import type { RuntimeMessage, RuntimeResponse } from "./lib/messages"
+import {
+  FULLTEXT_SEARCH_STREAM_PORT,
+  type FulltextSearchStreamRequest,
+  type FulltextSearchStreamResponse,
+  type RuntimeMessage,
+  type RuntimeResponse
+} from "./lib/messages"
 import { getSettings, saveSettings } from "./lib/settings"
 import { splitWords } from "./lib/wordSplit"
 
@@ -26,6 +32,69 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     .catch((error) => sendResponse({ error: String(error) }))
 
   return true
+})
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== FULLTEXT_SEARCH_STREAM_PORT) return
+
+  let stopped = false
+  let running = false
+  let connected = true
+
+  function postMessage(message: FulltextSearchStreamResponse): void {
+    if (!connected) return
+
+    try {
+      port.postMessage(message)
+    } catch {
+      connected = false
+      stopped = true
+    }
+  }
+
+  port.onDisconnect.addListener(() => {
+    connected = false
+    stopped = true
+  })
+
+  port.onMessage.addListener((message: FulltextSearchStreamRequest) => {
+    if (message.type === "stop") {
+      stopped = true
+      return
+    }
+
+    if (message.type !== "start" || running) return
+
+    running = true
+    void (async () => {
+      try {
+        const settings = await getSettings()
+        const result = await streamFulltextSearch({
+          db,
+          settings,
+          request: message.payload,
+          isStopped: () => stopped || !connected,
+          onProgress: (progress) =>
+            postMessage({ type: "progress", ...progress })
+        })
+
+        postMessage({
+          type: result.state,
+          scannedCount: result.scannedCount,
+          totalCount: result.totalCount,
+          matchedCount: result.matchedCount,
+          results: result.results
+        })
+      } catch (error) {
+        postMessage({
+          type: "error",
+          error: error instanceof Error ? error.message : "全文搜索失败"
+        })
+      } finally {
+        running = false
+      }
+    })()
+  })
 })
 
 async function handleMessage(message: RuntimeMessage): Promise<RuntimeResponse> {
@@ -77,4 +146,3 @@ async function handleMessage(message: RuntimeMessage): Promise<RuntimeResponse> 
       return { error: `Unknown message type: ${(message as RuntimeMessage).type}` }
   }
 }
-

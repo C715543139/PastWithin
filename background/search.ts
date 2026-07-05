@@ -1,6 +1,7 @@
 import type { PastWithinDb } from "./db"
 import type {
   AppSettings,
+  FulltextSearchStreamPayload,
   PageContentRecord,
   PageRecord,
   SearchRequest,
@@ -15,8 +16,19 @@ interface SnippetData {
 }
 
 interface SearchStrategy {
-  mode: SearchRequest["mode"]
+  mode: "token"
   isAvailable(settings: AppSettings): boolean
+}
+
+interface FulltextSearchProgress {
+  scannedCount: number
+  totalCount: number
+  matchedCount: number
+}
+
+interface FulltextSearchStreamResult extends FulltextSearchProgress {
+  state: "done" | "stopped"
+  results: SearchResult[]
 }
 
 function bookmarkScore(isBookmarked: boolean): number {
@@ -214,27 +226,17 @@ async function tokenSearch(
   })
 }
 
-async function fulltextSearch(
-  db: PastWithinDb,
-  request: SearchRequest,
+async function buildFulltextResults(params: {
+  contents: PageContentRecord[]
+  db: PastWithinDb
+  query: string
   maxResults: number
-): Promise<SearchResult[]> {
-  const query = request.query.trim()
-  if (!query) return []
-
+  onlyBookmarked?: boolean
+}): Promise<SearchResult[]> {
+  const { contents, db, query, maxResults, onlyBookmarked } = params
   const lowerQuery = query.toLowerCase()
-  const matchedContents = await db.pageContents
-    .filter(
-      (pageContent) =>
-        !!pageContent.content &&
-        pageContent.content.toLowerCase().includes(lowerQuery)
-    )
-    .toArray()
-
-  if (matchedContents.length === 0) return []
-
   const pages = await db.pages.bulkGet(
-    matchedContents.map((content) => content.pageId)
+    contents.map((content) => content.pageId)
   )
   const pageById = new Map<number, PageRecord>()
   for (const page of pages) {
@@ -243,10 +245,11 @@ async function fulltextSearch(
     }
   }
 
-  return matchedContents
+  return contents
     .map((pageContent) => {
       const page = pageById.get(pageContent.pageId)
       if (!page || !pageContent.content) return null
+      if (onlyBookmarked && !page.isBookmarked) return null
 
       const titleMatch = page.title.toLowerCase().includes(lowerQuery) ? 8 : 0
       const score =
@@ -276,11 +279,6 @@ export const tokenSearchStrategy: SearchStrategy = {
   isAvailable: () => true
 }
 
-export const fulltextSearchStrategy: SearchStrategy = {
-  mode: "fulltext",
-  isAvailable: (settings) => settings.saveContentEnabled
-}
-
 export async function searchPages(params: {
   db: PastWithinDb
   settings: AppSettings
@@ -289,26 +287,104 @@ export async function searchPages(params: {
 }): Promise<{ results: SearchResult[]; error?: string }> {
   const { db, settings, splitWords, request } = params
 
-  if (request.mode === "fulltext" && !fulltextSearchStrategy.isAvailable(settings)) {
-    return {
-      results: [],
-      error: "Fulltext search unavailable: saveContentEnabled is disabled"
-    }
-  }
-
   if (!request.query.trim()) {
     return { results: [] }
   }
 
   const maxResults = request.maxResults ?? settings.maxResults
-  const results =
-    request.mode === "token"
-      ? await tokenSearch(db, request, splitWords, maxResults)
-      : await fulltextSearch(db, request, maxResults)
+  const results = await tokenSearch(db, request, splitWords, maxResults)
 
   return {
     results: request.onlyBookmarked
       ? results.filter((result) => result.isBookmarked)
       : results
+  }
+}
+
+export async function streamFulltextSearch(params: {
+  db: PastWithinDb
+  settings: AppSettings
+  request: FulltextSearchStreamPayload
+  batchSize?: number
+  isStopped: () => boolean
+  onProgress: (progress: FulltextSearchProgress) => void
+}): Promise<FulltextSearchStreamResult> {
+  const {
+    db,
+    settings,
+    request,
+    batchSize = 100,
+    isStopped,
+    onProgress
+  } = params
+  const query = request.query.trim()
+  const maxResults = request.maxResults ?? settings.maxResults
+
+  if (!settings.saveContentEnabled) {
+    throw new Error("Fulltext search unavailable: saveContentEnabled is disabled")
+  }
+
+  if (!query) {
+    return {
+      state: "done",
+      scannedCount: 0,
+      totalCount: 0,
+      matchedCount: 0,
+      results: []
+    }
+  }
+
+  const lowerQuery = query.toLowerCase()
+  const totalCount = await db.pageContents
+    .filter((record) => !!record.content)
+    .count()
+  let scannedCount = 0
+  let lastPageId = 0
+  const matchedContents: PageContentRecord[] = []
+
+  onProgress({ scannedCount, totalCount, matchedCount: 0 })
+
+  while (!isStopped()) {
+    const batch = await db.pageContents
+      .where("pageId")
+      .above(lastPageId)
+      .limit(batchSize)
+      .toArray()
+
+    if (batch.length === 0) break
+
+    lastPageId = batch[batch.length - 1].pageId
+
+    for (const pageContent of batch) {
+      if (!pageContent.content) continue
+
+      scannedCount += 1
+      if (pageContent.content.toLowerCase().includes(lowerQuery)) {
+        matchedContents.push(pageContent)
+      }
+    }
+
+    onProgress({
+      scannedCount,
+      totalCount,
+      matchedCount: matchedContents.length
+    })
+  }
+
+  const state = isStopped() ? "stopped" : "done"
+  const results = await buildFulltextResults({
+    contents: matchedContents,
+    db,
+    query,
+    maxResults,
+    onlyBookmarked: request.onlyBookmarked
+  })
+
+  return {
+    state,
+    scannedCount,
+    totalCount,
+    matchedCount: matchedContents.length,
+    results
   }
 }

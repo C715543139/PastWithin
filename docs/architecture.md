@@ -334,81 +334,76 @@ Dexie 查询方式:
 
 这些限制通过 UI 文案解释,并提供全文查询入口。
 
-### 7.1 搜索策略设计
+### 7.1 一次性搜索接口
 
-搜索实现采用轻量策略模式,统一搜索入口和结果结构,但不引入复杂类继承或插件注册系统。
-
-接口:
+`search` 是一次请求、一次响应的搜索接口,当前只用于分词查询。
 
 ```ts
-interface SearchStrategy {
-  mode: "token" | "fulltext"
-  isAvailable(settings: AppSettings): boolean
-  search(request: SearchRequest): Promise<SearchResult[]>
-}
-```
-
-background 中只负责选择策略、校验可用性和返回统一结果:
-
-```ts
-const strategies: Record<SearchRequest["mode"], SearchStrategy> = {
-  token: tokenSearchStrategy,
-  fulltext: fulltextSearchStrategy
-}
-
-async function searchPages(request: SearchRequest) {
-  const settings = await getSettings()
-  const strategy = strategies[request.mode]
-
-  if (!strategy || !strategy.isAvailable(settings)) {
-    return {
-      results: [],
-      error: "search mode unavailable"
-    }
-  }
-
-  return {
-    results: await strategy.search(request)
-  }
+interface SearchRequest {
+  query: string
+  mode: "token"
+  onlyBookmarked?: boolean
+  maxResults?: number
 }
 ```
 
 约束:
 
-- 不使用 `AbstractSearchEngine`、`SearchStrategyFactory`、`SearchStrategyRegistry` 这类重型抽象。
-- 只保留 `tokenSearchStrategy`、`fulltextSearchStrategy` 和一个简单 dispatcher。
-- 每个策略内部负责自己的命中计算、snippet 生成和 highlight token 选择。
+- 不保留同步全文查询路径,避免同一能力存在两套实现。
+- `searchPages` 只负责分词查询、命中聚合、排序和片段生成。
+- 全文查询统一走 `fulltextSearchStream` port 接口。
 
 ## 8. 全文查询模块
 
 全文查询由用户手动选择,不作为默认模式。
 
-全文查询依赖已保存的原始全文 `content`。当设置中的 `saveContentEnabled` 为关闭时:
+全文查询依赖已保存的原始全文 `content`,统一使用 `chrome.runtime.connect({ name: "fulltextSearchStream" })` 建立流式搜索接口。当设置中的 `saveContentEnabled` 为关闭时:
 
 - popup 中的全文查询选项置灰或隐藏。
 - 如果当前模式已经是全文查询,自动切回分词查询。
-- background 收到 `mode: "fulltext"` 请求时再次校验设置,禁用状态下返回明确错误或空结果,避免 UI 状态不同步导致误查。
+- background 收到 `fulltextSearchStream` start 请求时再次校验设置,禁用状态下返回明确错误,避免 UI 状态不同步导致误查。
 
 流程:
 
 ```text
 用户输入原始 query
 → normalize query,但不分词
-→ 读取候选页面
-→ 对 content 做 includes 查询
+→ 建立 fulltextSearchStream port
+→ 按 pageId 批量读取已保存全文
+→ 对 content 做 includes 查询并累计进度
 → 找到匹配位置
 → 生成上下文片段
-→ 返回前 maxResults 条
+→ 完成或停止时返回前 maxResults 条
 ```
 
-在 background 中直接扫描已保存全文,配合 `maxResults` 控制返回数量。
+流式消息:
+
+```ts
+type FulltextSearchStreamRequest =
+  | { type: "start"; payload: FulltextSearchStreamPayload }
+  | { type: "stop" }
+
+type FulltextSearchStreamResponse =
+  | { type: "progress"; scannedCount: number; totalCount: number; matchedCount: number }
+  | { type: "done"; scannedCount: number; totalCount: number; matchedCount: number; results: SearchResult[] }
+  | { type: "stopped"; scannedCount: number; totalCount: number; matchedCount: number; results: SearchResult[] }
+  | { type: "error"; error: string }
+```
+
+扫描规则:
+
+- `totalCount` 只统计有已保存全文的页面。
+- background 每批扫描后发送 `progress`,popup 显示 `搜索中 scannedCount / totalCount` 和 `已找到 matchedCount`。
+- 点击"停止"发送 `{ type: "stop" }`,background 在当前批完成后返回 `stopped` 和已找到的部分结果。
+- popup 收到 `stopped` 后不立即展示结果,而是显示 `已停止搜索,扫描 x / y,找到 n 条`;当 `n > 0` 时展示可点击的"显示已找到的结果"。
+- popup 关闭或组件卸载时断开 port,background 停止扫描;不做后台持续任务。
+- `maxResults` 只限制最终返回数量,不提前结束扫描。
 
 短查询策略:
 
 - 不禁止 `R2`、`tf`、`B7`、`.m` 等短查询。
-- 当 query 去除首尾空白后的长度小于等于 2 时,在 UI 中提示可能较慢或命中较多。
-- 用户确认后才发起全文查询;取消或修改查询词时关闭提示。
-- 该确认只作用于全文查询,不影响分词查询。
+- 短查询不再做二次确认;用户按 Enter 或点击搜索后直接发起全文查询。
+- 全文查询期间可点击"停止"中断扫描,用于替代短查询确认带来的性能保护。
 
 ## 9. 匹配片段与高亮模块
 
@@ -458,8 +453,7 @@ popup 是主入口,宽度 420px,高度 500px 左右。
 交互:
 
 - `分词查询` 为默认模式,输入停止 300ms 后自动搜索。
-- `全文查询` 不做实时搜索,用户需要按 Enter 或点击搜索后才发起查询。
-- `全文查询` 输入长度小于等于 2 的短查询时,先显示确认提示,确认后才搜索。
+- `全文查询` 不做实时搜索,用户需要按 Enter 或点击搜索后才发起查询;搜索期间输入框和模式选择锁定,搜索按钮变为"停止"。
 - 用户提交表单时立即发起当前模式的搜索。
 - 中文输入法组合输入期间不触发实时搜索,选词完成后再进入 300ms 防抖。
 - 多次搜索并发返回时,只接受最新一次请求的结果,避免旧响应覆盖新结果。
@@ -523,11 +517,13 @@ interface CapturedPage {
 ```ts
 interface SearchRequest {
   query: string
-  mode: "token" | "fulltext"
+  mode: "token"
   onlyBookmarked?: boolean
   maxResults?: number
 }
 ```
+
+全文查询使用 `fulltextSearchStream` port,不通过 `RuntimeMessage.search`。
 
 ```ts
 interface SearchResult {
@@ -611,10 +607,10 @@ Manifest 权限:
 性能保护:
 
 - 全文长度上限。
-- 全文查询使用直接扫描。
+- 全文查询使用 `fulltextSearchStream` 分批扫描并回传进度。
 - 搜索结果数量上限。
 - popup 中分词查询使用 300ms 输入防抖控制查询频率。
-- popup 中全文查询保持手动触发,避免输入过程中频繁扫描全文。
+- popup 中全文查询保持手动触发,搜索期间锁定输入框和模式选择,支持停止扫描。
 - 非书签页面过期清理。
 
 存储保护:

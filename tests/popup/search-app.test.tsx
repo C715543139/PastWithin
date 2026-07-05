@@ -18,6 +18,20 @@ const result = {
   score: 12
 }
 
+function createFulltextStreamClient(messages: unknown[] = []) {
+  const stop = vi.fn()
+  const disconnect = vi.fn()
+  const client = vi.fn((_payload, onMessage) => {
+    for (const message of messages) {
+      onMessage(message)
+    }
+
+    return { stop, disconnect }
+  })
+
+  return { client, stop, disconnect }
+}
+
 function mockChromeRuntimeId(id: string) {
   ;(globalThis as { chrome?: unknown }).chrome = {
     runtime: { id }
@@ -125,22 +139,40 @@ describe("popup search app", () => {
     expect(item.querySelector(".result-favicon-fallback")).not.toBeNull()
   })
 
-  it("sends fulltext search requests when the user selects fulltext mode", async () => {
+  it("streams fulltext search requests when the user selects fulltext mode", async () => {
     const user = userEvent.setup()
     const searchClient = vi.fn().mockResolvedValue({ results: [result] })
+    const stream = createFulltextStreamClient([
+      {
+        type: "done",
+        scannedCount: 12,
+        totalCount: 12,
+        matchedCount: 1,
+        results: [result]
+      }
+    ])
 
-    render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
+    render(
+      <SearchApp
+        settings={defaultSettings}
+        searchClient={searchClient}
+        fulltextSearchStreamClient={stream.client}
+      />
+    )
 
     await user.selectOptions(screen.getByRole("combobox", { name: "搜索方式" }), "fulltext")
     await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "Main.gd:328 total_len")
     await user.click(screen.getByRole("button", { name: "搜索" }))
 
-    expect(searchClient).toHaveBeenCalledWith(
+    expect(searchClient).not.toHaveBeenCalled()
+    expect(stream.client).toHaveBeenCalledWith(
       expect.objectContaining({
         query: "Main.gd:328 total_len",
-        mode: "fulltext"
-      })
+        maxResults: defaultSettings.maxResults
+      }),
+      expect.any(Function)
     )
+    expect(await screen.findByRole("article", { name: "路径规划课程笔记" })).toBeInTheDocument()
   })
 
   it("highlights result titles case-insensitively", async () => {
@@ -256,8 +288,15 @@ describe("popup search app", () => {
   it("does not run fulltext search while typing and asks users to submit manually", async () => {
     vi.useFakeTimers()
     const searchClient = vi.fn().mockResolvedValue({ results: [result] })
+    const stream = createFulltextStreamClient()
 
-    render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
+    render(
+      <SearchApp
+        settings={defaultSettings}
+        searchClient={searchClient}
+        fulltextSearchStreamClient={stream.client}
+      />
+    )
 
     fireEvent.change(screen.getByRole("combobox", { name: "搜索方式" }), {
       target: { value: "fulltext" }
@@ -275,74 +314,113 @@ describe("popup search app", () => {
       vi.advanceTimersByTime(1000)
     })
     expect(searchClient).not.toHaveBeenCalled()
+    expect(stream.client).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole("button", { name: "搜索" }))
 
-    expect(searchClient).toHaveBeenCalledWith(
+    expect(stream.client).toHaveBeenCalledWith(
       expect.objectContaining({
-        query: "Main.gd:328 total_len",
-        mode: "fulltext"
-      })
+        query: "Main.gd:328 total_len"
+      }),
+      expect.any(Function)
     )
   })
 
-  it("asks for confirmation before running short fulltext queries", async () => {
+  it("runs short fulltext queries directly", async () => {
     const user = userEvent.setup()
     const searchClient = vi.fn().mockResolvedValue({ results: [result] })
+    const stream = createFulltextStreamClient()
 
-    render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
+    render(
+      <SearchApp
+        settings={defaultSettings}
+        searchClient={searchClient}
+        fulltextSearchStreamClient={stream.client}
+      />
+    )
 
     await user.selectOptions(screen.getByRole("combobox", { name: "搜索方式" }), "fulltext")
     await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "R2")
     await user.click(screen.getByRole("button", { name: "搜索" }))
 
     expect(searchClient).not.toHaveBeenCalled()
-    expect(screen.getByText(/全文查询词较短/)).toBeInTheDocument()
-
-    await user.click(screen.getByRole("button", { name: "继续全文搜索" }))
-
-    expect(searchClient).toHaveBeenCalledWith(
+    expect(stream.client).toHaveBeenCalledWith(
       expect.objectContaining({
-        query: "R2",
-        mode: "fulltext"
-      })
+        query: "R2"
+      }),
+      expect.any(Function)
     )
   })
 
-  it("lets users cancel short fulltext query confirmation", async () => {
+  it("shows fulltext progress, locks controls, and sends stop requests", async () => {
     const user = userEvent.setup()
     const searchClient = vi.fn().mockResolvedValue({ results: [] })
+    const stream = createFulltextStreamClient([
+      {
+        type: "progress",
+        scannedCount: 20,
+        totalCount: 1000,
+        matchedCount: 2
+      }
+    ])
 
-    render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
+    render(
+      <SearchApp
+        settings={defaultSettings}
+        searchClient={searchClient}
+        fulltextSearchStreamClient={stream.client}
+      />
+    )
 
     await user.selectOptions(screen.getByRole("combobox", { name: "搜索方式" }), "fulltext")
-    await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "tf")
+    await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "Main.gd")
     await user.click(screen.getByRole("button", { name: "搜索" }))
-    await user.click(screen.getByRole("button", { name: "取消" }))
 
-    expect(searchClient).not.toHaveBeenCalled()
-    expect(screen.queryByText(/全文查询词较短/)).not.toBeInTheDocument()
+    expect(screen.getByRole("searchbox", { name: /搜索/ })).toBeDisabled()
+    expect(screen.getByRole("combobox", { name: "搜索方式" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "停止" })).toBeInTheDocument()
+    expect(screen.getByText(/搜索中 20 \/ 1000/)).toBeInTheDocument()
+    expect(screen.getByText("已找到 2")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "停止" }))
+
+    expect(stream.stop).toHaveBeenCalled()
   })
 
-  it("clears short fulltext confirmation when the query changes", async () => {
+  it("keeps stopped fulltext results hidden until the user asks to show them", async () => {
     const user = userEvent.setup()
     const searchClient = vi.fn().mockResolvedValue({ results: [] })
+    const stream = createFulltextStreamClient([
+      {
+        type: "stopped",
+        scannedCount: 240,
+        totalCount: 1000,
+        matchedCount: 1,
+        results: [result]
+      }
+    ])
 
-    render(<SearchApp settings={defaultSettings} searchClient={searchClient} />)
+    render(
+      <SearchApp
+        settings={defaultSettings}
+        searchClient={searchClient}
+        fulltextSearchStreamClient={stream.client}
+      />
+    )
 
-    const searchbox = screen.getByRole("searchbox", { name: /搜索/ })
     await user.selectOptions(screen.getByRole("combobox", { name: "搜索方式" }), "fulltext")
-    await user.type(searchbox, "tf")
+    await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "Main.gd")
     await user.click(screen.getByRole("button", { name: "搜索" }))
 
-    expect(screen.getByText(/全文查询词较短/)).toBeInTheDocument()
+    expect(screen.getByText(/已停止搜索，扫描 240 \/ 1000，找到 1 条/)).toBeInTheDocument()
+    expect(screen.queryByRole("article", { name: "路径规划课程笔记" })).not.toBeInTheDocument()
 
-    await user.type(searchbox, "x")
+    await user.click(screen.getByRole("button", { name: "显示已找到的结果" }))
 
-    expect(screen.queryByText(/全文查询词较短/)).not.toBeInTheDocument()
+    expect(screen.getByRole("article", { name: "路径规划课程笔记" })).toBeInTheDocument()
   })
 
-  it("does not ask for confirmation for short token queries", async () => {
+  it("runs short token queries without extra confirmation", async () => {
     const user = userEvent.setup()
     const searchClient = vi.fn().mockResolvedValue({ results: [] })
 
@@ -351,7 +429,6 @@ describe("popup search app", () => {
     await user.type(screen.getByRole("searchbox", { name: /搜索/ }), "R2")
     await user.click(screen.getByRole("button", { name: "搜索" }))
 
-    expect(screen.queryByText(/全文查询词较短/)).not.toBeInTheDocument()
     expect(searchClient).toHaveBeenCalledWith(
       expect.objectContaining({
         query: "R2",

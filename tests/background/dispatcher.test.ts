@@ -3,9 +3,17 @@ import "fake-indexeddb/auto"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { AppSettings, SearchRequest, SearchResult, StorageStats } from "../../lib/types"
+import type { FulltextSearchStreamRequest } from "../../lib/messages"
 
 const capturePipelineMock = vi.fn().mockResolvedValue(undefined)
 const searchPagesMock = vi.fn().mockResolvedValue({ results: [] })
+const streamFulltextSearchMock = vi.fn().mockResolvedValue({
+    state: "done",
+    scannedCount: 2,
+    totalCount: 2,
+    matchedCount: 1,
+    results: [{ id: 1, title: "全文结果" } as SearchResult]
+})
 const clearAllDataMock = vi.fn().mockResolvedValue(undefined)
 const clearSavedContentMock = vi.fn().mockResolvedValue(undefined)
 const defaultStorageStats: StorageStats = {
@@ -33,7 +41,8 @@ vi.mock("../../background/capturePipeline", () => ({
     handleCapturedPageMessage: capturePipelineMock
 }))
 vi.mock("../../background/search", () => ({
-    searchPages: searchPagesMock
+    searchPages: searchPagesMock,
+    streamFulltextSearch: streamFulltextSearchMock
 }))
 vi.mock("../../background/db", () => ({
     createPastWithinDb: vi.fn(() => ({})),
@@ -59,17 +68,67 @@ type MessageListener = (
     sendResponse: (response: unknown) => void
 ) => boolean | undefined
 
+type ConnectListener = (port: MockPort) => void
+type PortMessageListener = (message: FulltextSearchStreamRequest) => void
+
 interface ChromeRuntimeMock {
     onMessage: { addListener: (listener: MessageListener) => void }
+    onConnect: { addListener: (listener: ConnectListener) => void }
 }
 
 let registeredListener: MessageListener | undefined
+let registeredConnectListener: ConnectListener | undefined
+
+interface MockPort {
+    name: string
+    postMessage: ReturnType<typeof vi.fn>
+    onMessage: { addListener: (listener: PortMessageListener) => void }
+    onDisconnect: { addListener: (listener: () => void) => void }
+}
+
+function createPort(name: string): {
+    port: MockPort
+    emitMessage: (message: FulltextSearchStreamRequest) => void
+    emitDisconnect: () => void
+} {
+    const messageListeners: PortMessageListener[] = []
+    const disconnectListeners: Array<() => void> = []
+    const port: MockPort = {
+        name,
+        postMessage: vi.fn(),
+        onMessage: {
+            addListener: (listener) => {
+                messageListeners.push(listener)
+            }
+        },
+        onDisconnect: {
+            addListener: (listener) => {
+                disconnectListeners.push(listener)
+            }
+        }
+    }
+
+    return {
+        port,
+        emitMessage: (message) => {
+            for (const listener of messageListeners) listener(message)
+        },
+        emitDisconnect: () => {
+            for (const listener of disconnectListeners) listener()
+        }
+    }
+}
 
 const chromeMock: Record<string, unknown> = {
     runtime: {
         onMessage: {
             addListener: (listener: MessageListener) => {
                 registeredListener = listener
+            }
+        },
+        onConnect: {
+            addListener: (listener: ConnectListener) => {
+                registeredConnectListener = listener
             }
         }
     }
@@ -94,6 +153,7 @@ describe("background message dispatcher", () => {
 
     it("registers a runtime onMessage listener that keeps the channel open", () => {
         expect(registeredListener).toBeDefined()
+        expect(registeredConnectListener).toBeDefined()
         expect(registeredListener?.({}, {}, vi.fn())).toBe(true)
     })
 
@@ -118,6 +178,33 @@ describe("background message dispatcher", () => {
             expect.objectContaining({ request })
         )
         expect(response).toEqual({ results: [{ id: 1 }] })
+    })
+
+    it("handles fulltextSearchStream ports with progress and final results", async () => {
+        const { port, emitMessage } = createPort("fulltextSearchStream")
+        registeredConnectListener?.(port)
+
+        emitMessage({
+            type: "start",
+            payload: { query: "Main.gd", maxResults: 10 }
+        })
+
+        await vi.waitFor(() => expect(streamFulltextSearchMock).toHaveBeenCalled())
+
+        expect(streamFulltextSearchMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                request: { query: "Main.gd", maxResults: 10 },
+                settings: defaultAppSettings
+            })
+        )
+        expect(port.postMessage).toHaveBeenCalledWith(
+            expect.objectContaining({
+                type: "done",
+                scannedCount: 2,
+                totalCount: 2,
+                matchedCount: 1
+            })
+        )
     })
 
     it("handles clearData by calling clearAllData", async () => {

@@ -1,7 +1,17 @@
 import { useEffect, useState } from "react"
 
 import { SearchApp } from "./SearchApp"
-import type { AppSettings, SearchRequest, SearchResult } from "../lib/types"
+import {
+  FULLTEXT_SEARCH_STREAM_PORT,
+  type FulltextSearchStreamRequest,
+  type FulltextSearchStreamResponse
+} from "../lib/messages"
+import type {
+  AppSettings,
+  FulltextSearchStreamPayload,
+  SearchRequest,
+  SearchResult
+} from "../lib/types"
 
 import "./popup.css"
 
@@ -74,6 +84,45 @@ export default function PopupIndex() {
     })
   }
 
+  const fulltextSearchStreamClient = (
+    payload: FulltextSearchStreamPayload,
+    onMessage: (message: FulltextSearchStreamResponse) => void
+  ) => {
+    if (!chromeAvailable() || typeof chrome.runtime.connect !== "function") {
+      onMessage({ type: "error", error: "Chrome extension API 不可用" })
+      return {
+        stop: () => undefined,
+        disconnect: () => undefined
+      }
+    }
+
+    const port = chrome.runtime.connect({ name: FULLTEXT_SEARCH_STREAM_PORT })
+    let connected = true
+
+    port.onMessage.addListener((message: FulltextSearchStreamResponse) => {
+      onMessage(message)
+    })
+    port.onDisconnect.addListener(() => {
+      connected = false
+    })
+
+    port.postMessage({
+      type: "start",
+      payload
+    } satisfies FulltextSearchStreamRequest)
+
+    return {
+      stop: () => {
+        if (connected) port.postMessage({ type: "stop" } satisfies FulltextSearchStreamRequest)
+      },
+      disconnect: () => {
+        if (!connected) return
+        connected = false
+        port.disconnect()
+      }
+    }
+  }
+
   const openSettings = () => {
     if (chromeAvailable() && chrome.runtime.openOptionsPage) {
       chrome.runtime.openOptionsPage()
@@ -111,7 +160,11 @@ export default function PopupIndex() {
           </button>
         </div>
       </header>
-      <SearchApp settings={settings} searchClient={searchClient} />
+      <SearchApp
+        settings={settings}
+        searchClient={searchClient}
+        fulltextSearchStreamClient={fulltextSearchStreamClient}
+      />
     </div>
   )
 }

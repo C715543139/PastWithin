@@ -9,18 +9,35 @@ import {
 
 import appIconUrl from "../assets/icon.png"
 import { getFaviconUrl } from "../lib/favicon"
-import type { AppSettings, SearchRequest, SearchResult } from "../lib/types"
+import type {
+  AppSettings,
+  FulltextSearchStreamPayload,
+  SearchMode,
+  SearchRequest,
+  SearchResult
+} from "../lib/types"
+import type { FulltextSearchStreamResponse } from "../lib/messages"
 
 type SearchClient = (
   params: Pick<SearchRequest, "query" | "mode" | "maxResults">
 ) => Promise<{ results: SearchResult[] }>
 
+interface FulltextSearchStreamController {
+  stop: () => void
+  disconnect: () => void
+}
+
+type FulltextSearchStreamClient = (
+  payload: FulltextSearchStreamPayload,
+  onMessage: (message: FulltextSearchStreamResponse) => void
+) => FulltextSearchStreamController
+
 const TOKEN_SEARCH_DEBOUNCE_MS = 300
-const SHORT_FULLTEXT_QUERY_MAX_LENGTH = 2
 
 interface SearchAppProps {
   settings: AppSettings
   searchClient: SearchClient
+  fulltextSearchStreamClient?: FulltextSearchStreamClient
 }
 
 function renderHighlightedText(
@@ -125,43 +142,53 @@ function InitialSearchHint() {
   )
 }
 
-export function SearchApp({ settings, searchClient }: SearchAppProps) {
+export function SearchApp({
+  settings,
+  searchClient,
+  fulltextSearchStreamClient = (_payload, onMessage) => {
+    onMessage({ type: "error", error: "全文搜索接口不可用" })
+    return {
+      stop: () => undefined,
+      disconnect: () => undefined
+    }
+  }
+}: SearchAppProps) {
   const [query, setQuery] = useState("")
-  const [mode, setMode] = useState<SearchRequest["mode"]>("token")
+  const [mode, setMode] = useState<SearchMode>("token")
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
   const [isComposing, setIsComposing] = useState(false)
-  const [pendingShortQuery, setPendingShortQuery] = useState<string | null>(null)
-  const [confirmedShortQuery, setConfirmedShortQuery] = useState<string | null>(null)
+  const [fulltextRunning, setFulltextRunning] = useState(false)
+  const [fulltextProgress, setFulltextProgress] = useState<{
+    scannedCount: number
+    totalCount: number
+    matchedCount: number
+  } | null>(null)
+  const [stoppedSummary, setStoppedSummary] = useState<{
+    scannedCount: number
+    totalCount: number
+    matchedCount: number
+  } | null>(null)
+  const [stoppedResults, setStoppedResults] = useState<SearchResult[]>([])
   const requestIdRef = useRef(0)
+  const fulltextControllerRef = useRef<FulltextSearchStreamController | null>(null)
 
   const fulltextDisabled = !settings.saveContentEnabled
 
   function updateQuery(nextQuery: string) {
+    if (fulltextRunning) return
     setQuery(nextQuery)
-    setPendingShortQuery(null)
-    setConfirmedShortQuery(null)
+    setStoppedSummary(null)
+    setStoppedResults([])
   }
 
-  function updateMode(nextMode: SearchRequest["mode"]) {
+  function updateMode(nextMode: SearchMode) {
+    if (fulltextRunning) return
     setMode(nextMode)
-    setPendingShortQuery(null)
-    setConfirmedShortQuery(null)
-  }
-
-  function shouldConfirmShortFulltextQuery(
-    trimmedQuery: string,
-    requestedMode: SearchRequest["mode"]
-  ): boolean {
-    return (
-      requestedMode === "fulltext" &&
-      !fulltextDisabled &&
-      trimmedQuery.length > 0 &&
-      trimmedQuery.length <= SHORT_FULLTEXT_QUERY_MAX_LENGTH &&
-      confirmedShortQuery !== trimmedQuery
-    )
+    setStoppedSummary(null)
+    setStoppedResults([])
   }
 
   const clearSearch = useCallback(() => {
@@ -170,10 +197,12 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
     setError(null)
     setLoading(false)
     setHasSearched(false)
+    setStoppedSummary(null)
+    setStoppedResults([])
   }, [])
 
   const runSearch = useCallback(
-    async (rawQuery: string, requestedMode: SearchRequest["mode"]) => {
+    async (rawQuery: string) => {
       const trimmedQuery = rawQuery.trim()
       if (!trimmedQuery) {
         clearSearch()
@@ -188,7 +217,7 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
       try {
         const response = await searchClient({
           query: trimmedQuery,
-          mode: fulltextDisabled ? "token" : requestedMode,
+          mode: "token",
           maxResults: settings.maxResults
         })
 
@@ -208,8 +237,102 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
         }
       }
     },
-    [clearSearch, fulltextDisabled, searchClient, settings.maxResults]
+    [clearSearch, searchClient, settings.maxResults]
   )
+
+  const disconnectFulltextStream = useCallback(() => {
+    fulltextControllerRef.current?.disconnect()
+    fulltextControllerRef.current = null
+  }, [])
+
+  const startFulltextSearch = useCallback(
+    (rawQuery: string) => {
+      const trimmedQuery = rawQuery.trim()
+      if (!trimmedQuery) {
+        clearSearch()
+        return
+      }
+
+      requestIdRef.current += 1
+      disconnectFulltextStream()
+      setResults([])
+      setError(null)
+      setLoading(false)
+      setHasSearched(false)
+      setStoppedSummary(null)
+      setStoppedResults([])
+      setFulltextRunning(true)
+      setFulltextProgress({
+        scannedCount: 0,
+        totalCount: 0,
+        matchedCount: 0
+      })
+
+      let completedDuringStart = false
+      const controller = fulltextSearchStreamClient(
+        {
+          query: trimmedQuery,
+          maxResults: settings.maxResults
+        },
+        (message) => {
+          if (message.type === "progress") {
+            setFulltextProgress({
+              scannedCount: message.scannedCount,
+              totalCount: message.totalCount,
+              matchedCount: message.matchedCount
+            })
+            return
+          }
+
+          setFulltextRunning(false)
+          setFulltextProgress(null)
+          completedDuringStart = true
+          fulltextControllerRef.current?.disconnect()
+          fulltextControllerRef.current = null
+
+          if (message.type === "done") {
+            setResults(message.results)
+            setHasSearched(true)
+            return
+          }
+
+          if (message.type === "stopped") {
+            setStoppedSummary({
+              scannedCount: message.scannedCount,
+              totalCount: message.totalCount,
+              matchedCount: message.matchedCount
+            })
+            setStoppedResults(message.results)
+            setResults([])
+            setHasSearched(false)
+            return
+          }
+
+          setError(message.error)
+          setResults([])
+          setHasSearched(true)
+        }
+      )
+
+      if (completedDuringStart) {
+        controller.disconnect()
+      } else {
+        fulltextControllerRef.current = controller
+      }
+    },
+    [
+      clearSearch,
+      disconnectFulltextStream,
+      fulltextSearchStreamClient,
+      settings.maxResults
+    ]
+  )
+
+  useEffect(() => {
+    return () => {
+      disconnectFulltextStream()
+    }
+  }, [disconnectFulltextStream])
 
   useEffect(() => {
     if (mode !== "token" || isComposing) return
@@ -221,7 +344,7 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
     }
 
     const timerId = window.setTimeout(() => {
-      void runSearch(trimmedQuery, "token")
+      void runSearch(trimmedQuery)
     }, TOKEN_SEARCH_DEBOUNCE_MS)
 
     return () => window.clearTimeout(timerId)
@@ -229,29 +352,35 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
 
   function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (fulltextRunning) return
+
     const trimmedQuery = query.trim()
-    if (shouldConfirmShortFulltextQuery(trimmedQuery, mode)) {
-      setPendingShortQuery(trimmedQuery)
+
+    if (mode === "fulltext" && !fulltextDisabled) {
+      startFulltextSearch(query)
       return
     }
 
-    void runSearch(query, mode)
+    void runSearch(query)
   }
 
-  function handleConfirmShortQuery() {
-    if (!pendingShortQuery) return
-
-    setConfirmedShortQuery(pendingShortQuery)
-    setPendingShortQuery(null)
-    void runSearch(pendingShortQuery, "fulltext")
+  function handleStopFulltextSearch() {
+    fulltextControllerRef.current?.stop()
   }
 
-  function handleCancelShortQuery() {
-    setPendingShortQuery(null)
+  function handleShowStoppedResults() {
+    setResults(stoppedResults)
+    setHasSearched(true)
+    setStoppedSummary(null)
+    setStoppedResults([])
   }
 
   const showInitialHint =
-    !hasSearched && !loading && !error && !pendingShortQuery
+    !hasSearched &&
+    !loading &&
+    !fulltextRunning &&
+    !error &&
+    !stoppedSummary
   const searchPlaceholder =
     fulltextDisabled
       ? "保存全文关闭，全文查询不可用"
@@ -270,6 +399,7 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
             type="text"
             value={query}
             placeholder={searchPlaceholder}
+            disabled={fulltextRunning}
             onChange={(event) => updateQuery(event.target.value)}
             onCompositionStart={() => setIsComposing(true)}
             onCompositionEnd={(event) => {
@@ -283,8 +413,9 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
               className="search-mode-select"
               aria-label="搜索方式"
               value={fulltextDisabled ? "token" : mode}
+              disabled={fulltextRunning}
               onChange={(event) =>
-                updateMode(event.target.value as SearchRequest["mode"])
+                updateMode(event.target.value as SearchMode)
               }
             >
               <option value="token">分词</option>
@@ -294,8 +425,12 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
             </select>
           </div>
 
-          <button type="submit" className="popup-btn popup-btn-primary">
-            搜索
+          <button
+            type={fulltextRunning ? "button" : "submit"}
+            className="popup-btn popup-btn-primary"
+            onClick={fulltextRunning ? handleStopFulltextSearch : undefined}
+          >
+            {fulltextRunning ? "停止" : "搜索"}
           </button>
         </div>
       </form>
@@ -303,32 +438,37 @@ export function SearchApp({ settings, searchClient }: SearchAppProps) {
       <div className="search-results">
         {showInitialHint && <InitialSearchHint />}
 
-        {pendingShortQuery && (
-          <div role="alert" className="short-query-confirm">
-            <p>全文查询词较短，可能命中大量页面并花费更久。</p>
-            <div className="short-query-actions">
-              <button
-                type="button"
-                onClick={handleConfirmShortQuery}
-                className="popup-btn popup-btn-primary"
-              >
-                继续全文搜索
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelShortQuery}
-                className="popup-btn popup-btn-secondary"
-              >
-                取消
-              </button>
-            </div>
-          </div>
-        )}
-
         {error && (
           <p role="alert" className="search-status search-status-error">
             搜索出错: {error}
           </p>
+        )}
+        {fulltextRunning && fulltextProgress && (
+          <div className="search-status fulltext-progress" role="status">
+            <p>
+              搜索中 {fulltextProgress.scannedCount} /{" "}
+              {fulltextProgress.totalCount}
+            </p>
+            <p>已找到 {fulltextProgress.matchedCount}</p>
+          </div>
+        )}
+        {stoppedSummary && (
+          <div className="search-status fulltext-stopped" role="status">
+            <p>
+              已停止搜索，扫描 {stoppedSummary.scannedCount} /{" "}
+              {stoppedSummary.totalCount}，找到{" "}
+              {stoppedSummary.matchedCount} 条
+            </p>
+            {stoppedSummary.matchedCount > 0 && (
+              <button
+                type="button"
+                className="stopped-results-link"
+                onClick={handleShowStoppedResults}
+              >
+                显示已找到的结果
+              </button>
+            )}
+          </div>
         )}
         {loading && <p className="search-status">搜索中...</p>}
         {hasSearched && !loading && !error && results.length === 0 && (

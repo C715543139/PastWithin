@@ -43,9 +43,17 @@ export interface UrlRule {
   updatedAt?: number
 }
 
+export type SearchMode = "token" | "fulltext"
+
 export interface SearchRequest {
   query: string
-  mode: "token" | "fulltext"
+  mode: "token"
+  onlyBookmarked?: boolean
+  maxResults?: number
+}
+
+export interface FulltextSearchStreamPayload {
+  query: string
   onlyBookmarked?: boolean
   maxResults?: number
 }

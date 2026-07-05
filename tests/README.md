@@ -55,16 +55,16 @@ npx tsc --noEmit
 - 页面标题、URL、全文、访问时间和书签状态采集。
 - URL/域名排除规则。
 - IndexedDB 页面数据、全文和分词索引保存。
-- 分词查询和全文查询。
+- 分词查询和全文流式查询。
 - 搜索结果字段、匹配片段和高亮。
 - popup 搜索入口的基本交互。
 - `jieba-wasm` + `Intl.Segmenter` 混合分词封装（测试中 mock WASM 初始化与分词输出）。
 - URL 归一化（hash 剥离与异常回退）。
 - 书签状态查询包装层（`chrome.bookmarks` 不可用与异常容错）。
 - 设置读写包装层（`chrome.storage.local` 合并默认值与异常容错）。
-- background 消息分发（`capturePage`/`search`/`clearData`/`clearSavedContent`/`getStats`/`getSettings`/`saveSettings` 及未知类型）。
+- background 消息分发（`capturePage`/`search`/`clearData`/`clearSavedContent`/`getStats`/`getSettings`/`saveSettings`、`fulltextSearchStream` port 及未知类型）。
 - content script 采集入口（自动保存开关、URL 排除、全文为空跳过）。
-- popup 挂载入口（设置加载、初始化错误、打开选项页、搜索转发）。
+- popup 挂载入口（设置加载、初始化错误、打开选项页、分词搜索转发和全文流式搜索连接）。
 - options 设置页（设置/统计加载、保存、清空数据与清空全文二次确认、排除规则编辑、加载失败提示）。
 
 ## 覆盖率
