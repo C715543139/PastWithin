@@ -1,6 +1,8 @@
 # PastWithin
 
-一个轻量、本地优先的 Chrome 插件,用于保存用户浏览过的普通网页全文,并支持通过全文关键词、连续片段、代码片段或短关键词找回页面。
+[English](README.en.md) | 简体中文
+
+一个轻量、本地优先的 Chrome 插件,用于保存用户浏览过的历史网页全文,并支持通过全文关键词、连续片段、代码片段或短关键词找回页面。
 
 <p align="center">
   <img src="docs/images/main-page.png" alt="PastWithin 主页面截图">
